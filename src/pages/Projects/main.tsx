@@ -1,17 +1,18 @@
 "use client";
 import { join } from '@tauri-apps/api/path';
-import { readTextFile, writeTextFile, BaseDirectory, remove, readDir, stat } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, BaseDirectory, remove } from "@tauri-apps/plugin-fs";
 import AddProjectDialog from "./addProjectDialog";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Code, Trash2, FolderOpen, Pin } from "lucide-react";
-const { open, Command } = await import("@tauri-apps/plugin-shell");
+import { Trash2, FolderOpen, Pin } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-shell";
 
-const PROJECTS_FILE = "projects/projects.json";
 
 const Projects = () => {
+  const PROJECTS_FILE = "projects/projects.json";
+
   const [projects, setProjects] = React.useState<any[]>([]);
   const [selectedProject, setSelectedProject] = React.useState<any | null>(null);
 

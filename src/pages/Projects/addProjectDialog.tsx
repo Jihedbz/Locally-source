@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
-import { writeTextFile, readTextFile, BaseDirectory, mkdir } from "@tauri-apps/plugin-fs";
-import { resolve, appDataDir } from "@tauri-apps/api/path";
+import { writeTextFile, readTextFile, BaseDirectory} from "@tauri-apps/plugin-fs";
+import { appDataDir } from "@tauri-apps/api/path";
 // UI Components
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
