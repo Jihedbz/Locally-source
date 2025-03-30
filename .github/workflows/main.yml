@@ -54,7 +54,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.TARGET_REPO_TOKEN }}
         with:
-          repository: "jihedbz/Locally"  # Replace with your target repo (e.g., "myorg/releases")
+          owner: "Jihedbz"  
+          repo: "Locally"   
           tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
           releaseName: 'App v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
