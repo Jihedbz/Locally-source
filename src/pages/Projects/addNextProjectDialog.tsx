@@ -1,0 +1,189 @@
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { writeTextFile, readTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
+import { appDataDir } from "@tauri-apps/api/path";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Terminal } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+
+interface Project {
+  name: string;
+  path: string;
+  type: string;
+  createdAt: string;
+}
+
+interface FormState {
+  name: string;
+  typescript: boolean;
+  eslint: boolean;
+  tailwind: boolean;
+  src: boolean;
+  turbopack: boolean;
+  appRouter: boolean;
+}
+
+export function AddNextProjectDialog() {
+  const [form, setForm] = useState<FormState>({
+    name: "",
+    typescript: false,
+    eslint: false,
+    tailwind: false,
+    src: false,
+    turbopack: false,
+    appRouter: false,
+  });
+
+  const [alert, setAlert] = useState<{ type: "error" | "success"; message: string } | null>(null);
+
+  const handleChange = (name: keyof FormState, value: boolean | string) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!form.name.trim()) {
+      setAlert({ type: "error", message: "Project name is required." });
+      return;
+    }
+
+    try {
+      const appDataDirPath = await appDataDir();
+      const projectPath = `${appDataDirPath}projects/`;
+      const now = new Date().toISOString();
+
+      await invoke("create_next_project", {
+        name: form.name,
+        typescript: form.typescript ? "yes" : "no",
+        eslint: form.eslint ? "yes" : "no",
+        tailwind: form.tailwind ? "yes" : "no",
+        src: form.src ? "yes" : "no",
+        appRouter: form.appRouter ? "yes" : "no",
+        turbopack: form.turbopack ? "yes" : "no",
+      });
+
+      const newProject: Project = {
+        name: form.name,
+        path: projectPath,
+        type: "Next",
+        createdAt: now,
+      };
+
+      await saveProject(newProject);
+      setAlert({ type: "success", message: "Project created successfully in AppData/projects." });
+      setForm({ name: "", typescript: false, eslint: false, tailwind: false, src: false, turbopack: false, appRouter: false });
+    } catch (error) {
+      console.error(error);
+      setAlert({ type: "error", message: `Failed to create project: ${error}` });
+    }
+  };
+
+  const saveProject = async (project: Project) => {
+    try {
+      const filePath = "projects/projects.json";
+      let projects: Project[] = [];
+
+      try {
+        const data = await readTextFile(filePath, { baseDir: BaseDirectory.AppData });
+        projects = JSON.parse(data);
+      } catch (error) {
+        if (!(error instanceof Error && error.message.includes("File not found"))) {
+          throw error;
+        }
+      }
+
+      projects.push(project);
+      await writeTextFile(filePath, JSON.stringify(projects, null, 2), { baseDir: BaseDirectory.AppData, create: true });
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    if (alert) {
+      const timer = setTimeout(() => setAlert(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert]);
+
+  const options: { label: string; field: keyof FormState; description: string }[] = [
+    { label: "TypeScript", field: "typescript", description: "Initialize as a TypeScript project" },
+    { label: "ESLint", field: "eslint", description: "Initialize with ESLint config" },
+    { label: "Tailwind CSS", field: "tailwind", description: "Initialize with Tailwind CSS config" },
+    { label: "Src/", field: "src", description: "Initialize inside a 'src/' directory" },
+    { label: "Turbopack", field: "turbopack", description: "Enable Turbopack by default for development" },
+    { label: "AppRouter", field: "appRouter", description: "Initialize as an App Router project" },
+  ];
+
+  return (
+<div className="w-full max-w-3xl px-6 mx-auto space-y-8">
+  <div className="space-y-2 text-center">
+    <h1 className="text-3xl font-bold tracking-tight">🚀 Spin Up a New Next.js Project</h1>
+    <p className="text-sm text-muted-foreground">
+      Configure your setup quickly — dependencies won’t be installed just yet for ⚡ instant scaffolding.
+    </p>
+  </div>
+
+  <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="grid gap-4">
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="projectName" className="text-right">
+          📝 Project Name
+        </Label>
+        <Input
+          className="col-span-3"
+          id="projectName"
+          value={form.name}
+          onChange={(e) => handleChange("name", e.target.value)}
+          placeholder="e.g., portfolio-site"
+        />
+      </div>
+    </div>
+
+    <Separator />
+
+    <div className="space-y-4">
+      <Label className="text-base font-semibold">🛠️ Customize Your Stack</Label>
+      <div className="grid gap-4">
+        {options.map((option) => (
+          <div className="flex items-start space-x-3" key={option.field}>
+            <Checkbox
+              id={option.field}
+              checked={!!form[option.field]}
+              onCheckedChange={(checked) => handleChange(option.field, !!checked)}
+            />
+            <div className="grid gap-1.5 leading-none">
+              <label htmlFor={option.field} className="text-sm font-medium leading-none">
+                {option.label}
+              </label>
+              <p className="text-sm text-muted-foreground">{option.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <div className="text-right">
+      <Button type="submit">✨ Generate Project</Button>
+    </div>
+  </form>
+
+  {alert && (
+    <div className="z-[1000] fixed bottom-6 right-6 p-4 rounded-md w-72 transition-opacity duration-5000 ease-in-out">
+      <Alert variant={alert.type === "success" ? "default" : "destructive"}>
+        <Terminal className="h-4 w-4" />
+        <AlertTitle>{alert.type === "success" ? "✅ Success!" : "❌ Oops!"}</AlertTitle>
+        <AlertDescription>{alert.message}</AlertDescription>
+      </Alert>
+    </div>
+  )}
+</div>
+  );
+}
+
+export default AddNextProjectDialog;

@@ -1,21 +1,11 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
-import { writeTextFile, readTextFile, BaseDirectory, mkdir } from "@tauri-apps/plugin-fs";
-import { resolve, appDataDir } from "@tauri-apps/api/path";
+import { writeTextFile, readTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
+import { appDataDir } from "@tauri-apps/api/path";
 // UI Components
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogTrigger,
@@ -26,18 +16,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Terminal, Plus } from "lucide-react";
+import { Terminal } from "lucide-react";
 
-type ProjectType = "Angular" | "React" | "Vue" | "Symfony";
 
 interface Project {
   name: string;
   path: string;
-  type: ProjectType;
+  type: string;
 }
 
-export function AddProjectDialog({ onAddProject }: { onAddProject: (project: Project) => void }) {
-  const [form, setForm] = useState({ name: "", type: "" }); // Removed path from state
+export function AddAngularProjectDialog({ onAddProject }: { onAddProject: (project: Project) => void }) { const [form, setForm] = useState({ name: "", type: "" }); // Removed path from state
   const [alert, setAlert] = useState<{ type: "error" | "success"; message: string } | null>(null);
 
   
@@ -49,7 +37,7 @@ export function AddProjectDialog({ onAddProject }: { onAddProject: (project: Pro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.name || !form.type) {
+    if (!form.name) {
       setAlert({ type: "error", message: "All fields are required." });
       return;
     }
@@ -65,16 +53,14 @@ export function AddProjectDialog({ onAddProject }: { onAddProject: (project: Pro
 
     
       // Pass the full path to the backend
-      await invoke("create_project", {
-        name: form.name,
-        path: projectPath,  // Full path (e.g., "C:/Users/You/AppData/Roaming/YourApp/projects/ProjectName")
-        template: form.type,
+      await invoke("create_angular_project", {
+        name: form.name
       });
     
       const newProject = { 
         name: form.name, 
         path: projectPath,  // Store the full path
-        type: form.type as ProjectType,
+        type: "Angular",
         createdAt: now 
       };
 
@@ -87,6 +73,8 @@ export function AddProjectDialog({ onAddProject }: { onAddProject: (project: Pro
       setAlert({ type: "error", message: `Failed to create project: ${error}` });
     }
   };
+
+  //save the project info in the JSON file
     const saveProject = async (project: Project) => {
     try {
       const filePath = 'projects/projects.json'; // Save in AppData root
@@ -122,71 +110,68 @@ export function AddProjectDialog({ onAddProject }: { onAddProject: (project: Pro
 
   return (
     <Dialog>
+
+
+
+
       <DialogTrigger asChild>
-        <Button variant="outline" >
-          <Plus />Add a new project
+
+        <Button variant="ghost" className="mr-2">
+          <i className="devicon-angularjs-plain colored mr-2 items-center" />
+          Angular
         </Button>
+
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add a Project</DialogTitle>
-          <DialogDescription>Enter details and deploy your project.</DialogDescription>
+          <DialogTitle>Angular Project</DialogTitle>
+          <DialogDescription>
+            Enter details and deploy your project.
+            <br />
+            Project will be deployed without installed dependencies.
+          </DialogDescription>
         </DialogHeader>
-
 
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="projectName" className="text-right">Name</Label>
-              <Input className="col-span-3" id="projectName" value={form.name} onChange={(e) => handleChange("name", e.target.value)} />
+              <Label htmlFor="projectName" className="text-right">
+                Name
+              </Label>
+              <Input
+                className="col-span-3"
+                id="projectName"
+                value={form.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+              />
             </div>
 
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="framework" className="text-right">Project Type</Label>
-              <Select value={form.type} onValueChange={(value) => handleChange("type", value)}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select your type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Select a type</SelectLabel>
-                    <SelectItem value="Angular"><i className="devicon-angularjs-plain colored"></i>Angular (Latest)</SelectItem>
-                    <SelectItem value="React"><i className="devicon-react-original colored"></i>React (Latest)</SelectItem>
-                    <SelectItem value="Vue">Vue (WIP)</SelectItem>
-                    <SelectItem value="Symfony">Symfony (WIP)</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+
+            
+            
+
           </div>
 
           <DialogFooter>
             <Button type="submit">Deploy 🚀</Button>
           </DialogFooter>
         </form>
-
-
-
       </DialogContent>
 
       {alert && (
-    <div
-      className={`z-[1000] fixed bottom-6 right-6 p-4 rounded-md w-72 transition-opacity duration-5000 ease-in-out`}
-    >
-      <Alert variant={alert.type === "success" ? "default" : "destructive"}>
-        <Terminal className="h-4 w-4" />
-        <AlertTitle>{alert.type === "success" ? "Success!" : "Error"}</AlertTitle>
-        <AlertDescription>{alert.message}</AlertDescription>
-      </Alert>
-    </div>
-  )}
-
-
+        <div
+          className={`z-[1000] fixed bottom-6 right-6 p-4 rounded-md w-72 transition-opacity duration-5000 ease-in-out`}
+        >
+          <Alert variant={alert.type === "success" ? "default" : "destructive"}>
+            <Terminal className="h-4 w-4" />
+            <AlertTitle>{alert.type === "success" ? "Success!" : "Error"}</AlertTitle>
+            <AlertDescription>{alert.message}</AlertDescription>
+          </Alert>
+        </div>
+      )}
     </Dialog>
-    
-
   );
 }
 
-export default AddProjectDialog;
+export default AddAngularProjectDialog;

@@ -33,4 +33,5 @@ tauri-plugin-fs = "2.0.0"
 tauri-utils = "1.0"
 tauri-plugin-shell = "2.0.0"
 tauri-plugin-persisted-scope = "2.0.0"
+once_cell = "1.21.3"
 

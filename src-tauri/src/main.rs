@@ -1,10 +1,36 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tauri::command;
 use tokio::task;
 use std::fs;
-
+use once_cell::sync::Lazy;
+use tauri::AppHandle;
+use std::sync::Mutex;
+use tauri::Manager;
 use std::time::{UNIX_EPOCH};
+use std::collections::HashMap;
+
+static PROJECTS_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
+
+// Function to initialize the projects path once
+fn init_project_path(handle: &AppHandle) {
+    let mut path_guard = PROJECTS_PATH.lock().unwrap();
+    if path_guard.is_none() {
+        if let Ok(mut path) = handle.path().app_data_dir() {
+            path.push("projects"); // Append "projects" folder
+            *path_guard = Some(path);
+        }
+    }
+}
+
+// Function to get the projects path
+fn get_project_path() -> Option<PathBuf> {
+    PROJECTS_PATH.lock().unwrap().clone()
+}
+
+
+
+
 
 #[command]
 fn get_last_modified(dir_path: String) -> Option<u64> {
@@ -59,15 +85,20 @@ fn get_folder_size(path: String) -> u64 {
 
 
 #[command]
-async fn create_project(name: String, path: String, template: String) -> Result<String, String> {
+async fn create_angular_project(name: String, handle: AppHandle) -> Result<String, String> {
     // Debug: Log the received path
+
+    init_project_path(&handle);
+
+    // Get the projects path
+    let Some(path) = get_project_path() else {
+        return Err("Failed to resolve app data directory".to_string());
+    };
+
+
     println!("Received project path: {:?}", path);
 
-    let command = match template.as_str() {
-        "React" => format!("npx create-react-app {}", name),
-        "Angular" => format!("ng new {} --skip-install", name),
-        _ => return Err("Invalid template".to_string()),
-    };
+    let command = format!("ng new {} --skip-install", name);
 
     println!("Running command: {} in {:?}", command, path);
 
@@ -110,72 +141,73 @@ async fn create_project(name: String, path: String, template: String) -> Result<
     result.map_err(|e| e.to_string())?
 }
 
+
+
+
 #[command]
-async fn create_next_project(name: String, path: String, typescript: String, 
-                            eslint: String, tailwind: String, src: String, 
-                            app_router: String, turbopack: String, alias: String) -> Result<String, String> {
+async fn create_next_project(
+    name: String,
+    typescript: String,
+    eslint: String,
+    tailwind: String,
+    src: String,
+    app_router: String,
+    turbopack: String,
+    handle: AppHandle
+) -> Result<String, String> {
+
+    init_project_path(&handle);
+
+    // Get the projects path
+    let Some(path) = get_project_path() else {
+        return Err("Failed to resolve app data directory".to_string());
+    };
+
     // Debug: Log the received path
     println!("Received project path: {:?}", path);
 
-    let typescript_reformed = match typescript.as_str() {
-        "yes" => format!("--typescript"),
-        "no" => format!("--js"),
-        _ => return Err("Invalid typescript".to_string()),
-    };
+    // Helper function to handle the option transformation
+    fn transform_option(option: &str, yes_flag: &str, no_flag: &str) -> Result<String, String> {
+        match option {
+            "yes" => Ok(yes_flag.to_string()),
+            "no" => Ok(no_flag.to_string()),
+            _ => Err(format!("Invalid option: {}", option)),
+        }
+    }
 
-    let eslint_reformed = match eslint.as_str() {
-        "yes" => format!("--eslint"),
-        "no" => format!("--no-eslint"),
-        _ => return Err("Invalid eslint".to_string()),
-    };
+    // Create a HashMap to handle the options
+    let mut options: HashMap<&str, (String, String)> = HashMap::new();
+    options.insert("typescript", ("--typescript".to_string(), "--js".to_string()));
+    options.insert("eslint", ("--eslint".to_string(), "--no-eslint".to_string()));
+    options.insert("tailwind", ("--tailwind".to_string(), "--no-tailwind".to_string()));
+    options.insert("src", ("--src-dir".to_string(), "--no-src-dir".to_string()));
+    options.insert("turbopack", ("--turbopack".to_string(), "--no-turbopack".to_string()));
+    options.insert("app_router", ("--app".to_string(), "--no-app".to_string()));
 
-    let tailwind_reformed = match tailwind.as_str() {
-        "yes" => format!("--tailwind"),
-        "no" => format!("--no-tailwind"),
-        _ => return Err("Invalid tailwind".to_string()),
-    };
+    // Collect all the options
+    let mut command_parts = vec![name.clone()];
 
-    let src_reformed = match src.as_str() {
-        "yes" => format!("--src"),
-        "no" => format!("--no-src"),
-        _ => return Err("Invalid src".to_string()),
-    };
+    for (key, (yes_flag, no_flag)) in options.iter() {
+        let option_value = match key {
+            &"typescript" => &typescript,
+            &"eslint" => &eslint,
+            &"tailwind" => &tailwind,
+            &"src" => &src,
+            &"turbopack" => &turbopack,
+            &"app_router" => &app_router,
+            _ => unreachable!(),
+        };
 
-    let alias_reformed = if alias == "no" {
-        "--no-alias".to_string()
-    } else {
-        format!("--import-alias {}", alias)
-    };
-    
-
-    let turbopack_reformed = match turbopack.as_str() {
-        "yes" => format!("--turbopack"),
-        "no" => format!("--no-turbopack"),
-        _ => return Err("Invalid app router".to_string()),
-    };
-
-    let app_router_reformed = match app_router.as_str() {
-        "yes" => format!("--turbopack"),
-        "no" => format!("--no-turbopack"),
-        _ => return Err("Invalid app router".to_string()),
-    };
-
-
-
+        match transform_option(option_value, &yes_flag, &no_flag) {
+            Ok(flag) => command_parts.push(flag),
+            Err(err) => return Err(err),
+        }
+    }
 
     let command = format!(
-        "npx create-next-app@latest {} {} {} {} {} {} {} {}",
-        name, 
-        typescript_reformed, 
-        eslint_reformed, 
-        tailwind_reformed, 
-        src_reformed, 
-        app_router_reformed, 
-        turbopack_reformed, 
-        alias_reformed
+        "npx create-next-app@latest {} --no-import-alias --skip-install",
+        command_parts.join(" ")
     );
-
-
 
     println!("Running command: {} in {:?}", command, path);
 
@@ -187,10 +219,7 @@ async fn create_next_project(name: String, path: String, typescript: String,
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .output()
-                .map_err(|e| {
-                    println!("Command execution failed: {}", e);
-                    e.to_string()
-                })?
+                .map_err(|e| e.to_string())?
         } else {
             Command::new("sh")
                 .arg("-c")
@@ -199,10 +228,7 @@ async fn create_next_project(name: String, path: String, typescript: String,
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .output()
-                .map_err(|e| {
-                    println!("Command execution failed: {}", e);
-                    e.to_string()
-                })?
+                .map_err(|e| e.to_string())?
         };
 
         if output.status.success() {
@@ -227,7 +253,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_persisted_scope::init())
-        .invoke_handler(tauri::generate_handler![create_project, get_last_modified, get_folder_size, create_next_project])
+        .invoke_handler(tauri::generate_handler![create_angular_project, get_last_modified, get_folder_size, create_next_project])
         .run(tauri::generate_context!())
         .expect("Error while running Tauri application");
 }

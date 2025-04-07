@@ -4,10 +4,10 @@ import {
   Settings2,
   Home, FolderDot, Wrench
 } from "lucide-react"
+import { ModeToggle } from "@/components/ui/modeToggle";
 
 
 import { NavMain } from "@/components/Structure/nav-main"
-import { NavUser } from "@/components/Structure/nav-user"
 import { TeamSwitcher } from "@/components/Structure/team-switcher"
 import {
   Sidebar,
@@ -65,8 +65,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
-      </SidebarFooter>
+  <div className="flex items-center justify-between w-full px-2 py-1 text-sm text-muted-foreground">
+    <span>
+      Made with <span className="text-red-500">❤️</span> by <strong>Jihed Bouazizi</strong>
+    </span>
+    <ModeToggle />
+  </div>
+</SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )

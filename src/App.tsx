@@ -6,7 +6,7 @@ import Home from "./pages/Home/main";
 import Projects from "./pages/Projects/main";
 import Settings from "./pages/Settings/main";
 import Tools from "./pages/Tools/main";
-
+import CreateNext from "./pages/Projects/addNextProjectDialog"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -21,7 +21,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { ModeToggle } from "./components/ui/modeToggle";
 function App() {
 
 
@@ -36,7 +35,6 @@ function App() {
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
-            <ModeToggle />
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
@@ -58,6 +56,7 @@ function App() {
               <Route path="/projects" element={<Projects />} />
               <Route path="/tools" element={<Tools />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/nextjs" element={<CreateNext />} />
             </Routes>
           </div>
       </SidebarInset>
