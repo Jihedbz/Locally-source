@@ -8,6 +8,7 @@ import { FolderOpen, Pin, Trash2, Play } from "lucide-react";
 import { writeTextFile, BaseDirectory, remove } from "@tauri-apps/plugin-fs"; 
 import { join } from '@tauri-apps/api/path';
 const { open } = await import("@tauri-apps/plugin-shell");
+import { Command } from '@tauri-apps/plugin-shell';
 
 type ProjectActionsProps = {
   project: any;
@@ -41,6 +42,32 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ project, projects, setP
     alert(`Opening ${name} in VSCode...`);
   };
 
+  const handleOpenTerminal = async (path: string) => {
+    try {
+      // For different OS platforms
+      let terminalUrl;
+      
+      if (navigator.platform.includes('Win')) {
+        // On Windows, we can use the file explorer path to open command prompt
+        terminalUrl = `terminal://${path}`;
+      } else if (navigator.platform.includes('Mac')) {
+        // On macOS, we're using a terminal URL scheme
+        terminalUrl = `terminal:${path}`;
+      } else {
+        // On Linux, behavior may vary
+        terminalUrl = `file://${path}`;
+      }
+      
+      // Open the terminal using the platform's URL handler
+      await open(terminalUrl);
+      
+      alert(`Opening terminal in ${path}...`);
+    } catch (error) {
+      console.error('Failed to open terminal:', error);
+      alert(`Failed to open terminal in ${path}`);
+    }
+  };
+  
   // Toggle Pin project
   const togglePinProject = (projectName: string) => {
     const updatedProjects = projects.map((p) =>
@@ -100,6 +127,11 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ project, projects, setP
                         <i className="devicon-vscode-plain mr-2" />
                         Vs Code
                     </DropdownMenuItem> 
+
+                    <DropdownMenuItem onClick={() => handleOpenTerminal(project.path)}>
+                        <i className="devicon-powershell-plain mr-2" />
+                        PowerShell
+                    </DropdownMenuItem> 
                                    
                 </DropdownMenuSubContent>
             </DropdownMenuPortal>
@@ -118,10 +150,19 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({ project, projects, setP
           <Play className="mr-2"/>
           Start
         </DropdownMenuItem>
-        <DropdownMenuItem >
+        <DropdownMenuItem disabled >
         <i className="mr-2 devicon-npm-original-wordmark"></i>
           Npm
         </DropdownMenuItem>
+        <DropdownMenuItem disabled >
+        <i className="mr-2 devicon-docker-plain "></i>
+          Docker
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled >
+        <i className="mr-2 devicon-git-plain"></i>
+          Git
+        </DropdownMenuItem>
+
         <DropdownMenuItem onClick={() => handleDeleteProject(project)}>
           <Trash2 className="mr-2" />
           Delete

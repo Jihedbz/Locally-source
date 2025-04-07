@@ -7,6 +7,7 @@ import Projects from "./pages/Projects/main";
 import Settings from "./pages/Settings/main";
 import Tools from "./pages/Tools/main";
 import CreateNext from "./pages/Projects/addNextProjectDialog"
+import { Changelogs } from "./pages/Misc/changeLogs";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -30,9 +31,10 @@ function App() {
       <Router>
       <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
+      <SidebarInset >  
+        <div className="min-h-screen flex flex-col bg-gradient-to-br from-white/10 to-black/20 backdrop-blur-md">
+    <header className="h-16 flex items-center px-4">
+    <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
             <Breadcrumb>
@@ -50,14 +52,18 @@ function App() {
             </Breadcrumb>
           </div>
         </header>
-        <div>
-            <Routes>
+        <main className="flex-1 p-6">
+        <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/projects" element={<Projects />} />
               <Route path="/tools" element={<Tools />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/nextjs" element={<CreateNext />} />
+              <Route path="/changelogs" element={<Changelogs />} />
+
             </Routes>
+            </main>
+
           </div>
       </SidebarInset>
     </SidebarProvider>

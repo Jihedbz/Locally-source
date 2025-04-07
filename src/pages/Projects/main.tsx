@@ -84,11 +84,15 @@
     }, [selectedProject]);
 
 
-
     return (
-      <div className="flex h-full w-full p-6">
+      <div className="flex flex-1 min-h-[calc(100vh-4rem)] p-6">
+
+      
+      <div className="flex h-full w-full p-6 ">
         {/* Left Sidebar: Project List */}
+
         <div className="w-1/4 max-w-xs border-r p-4 overflow-y-auto flex flex-col items-center justify-center">
+
           <h2 className="text-lg font-bold mb-4">Projects</h2>
 
           <DropdownMenu>
@@ -97,7 +101,7 @@
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-35">
 
-        <DropdownMenuItem  onClick={() => navigate("/nextjs")}>
+        <DropdownMenuItem disabled onClick={() => navigate("/nextjs")}>
         <Search />
           Locate
         </DropdownMenuItem>
@@ -113,23 +117,29 @@
           Angular
         </DropdownMenuItem>
 
-        <DropdownMenuItem  onClick={() => navigate("/nextjs")}>
+        <DropdownMenuItem disabled onClick={() => navigate("/nextjs")}>
           
         <i className="devicon-react-plain colored"></i>
           ReactJs
         </DropdownMenuItem>
 
-        <DropdownMenuItem  onClick={() => navigate("/nextjs")}>
+        <DropdownMenuItem disabled onClick={() => navigate("/nextjs")}>
           
         <i className="devicon-vuejs-plain colored"></i>
           VueJs
         </DropdownMenuItem>
 
-        <DropdownMenuItem  onClick={() => navigate("/nextjs")}>
+        <DropdownMenuItem disabled onClick={() => navigate("/nextjs")}>
           
         <i className="devicon-symfony-plain"></i>
           Symfony
         </DropdownMenuItem>
+
+        <DropdownMenuItem disabled onClick={() => navigate("/nextjs")}>
+          
+          <i className="devicon-laravel-plain colored"></i>
+            Laravel
+          </DropdownMenuItem>
 
 
 
@@ -153,9 +163,7 @@
                   onClick={() => handleProjectClick(project)}
                 >
                   <div className="flex items-center w-full">
-                    <div className="w-8 flex justify-center">
-                      {getProjectIcon(project.type)}
-                    </div>
+                  {getProjectIcon(project.type)}
                     <span className="truncate">{project.name}</span>
                   </div>
                   {project.pinned && <Pin className="h-5 w-5 text-yellow-500 ml-2" />}
@@ -173,7 +181,10 @@
                 <div>
                   <div className="flex flex-row">
                     <div className="basis-1/2">
-                      <h2 className="text-2xl font-bold truncate underline" style={{ width: '250px' }}>
+                    
+                      <h2 className="text-2xl font-bold truncate" style={{ width: '250px' }}>
+                      {getProjectIcon(selectedProject.type)}
+
                         {selectedProject.name.replace(/^[a-z]/, (char: string) => char.toUpperCase())}
                       </h2>
                     </div>
@@ -196,6 +207,8 @@
           )}
         </div>
       </div>
+      </div>
+
     );
   };
 

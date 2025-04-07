@@ -2,7 +2,8 @@ import * as React from "react"
 import {
   GalleryVerticalEnd,
   Settings2,
-  Home, FolderDot, Wrench
+  Home, FolderDot, Wrench, LifeBuoy, Send,
+  Newspaper
 } from "lucide-react"
 import { ModeToggle } from "@/components/ui/modeToggle";
 
@@ -16,6 +17,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { NavSecondary } from "./nav-secondary";
 
 // This is sample data.
 const data = {
@@ -52,6 +54,25 @@ const data = {
       icon: Settings2,
     },
   ],
+  navSecondary: [
+    {
+      title: "Changelog",
+      url: "/changelogs",
+      icon: Newspaper,
+
+    },
+    {
+      title: "Support",
+      url: "/support",
+      icon: LifeBuoy,
+    },
+    {
+      title: "Feedback",
+      url: "#",
+      icon: Send,
+    },
+  ]
+  
 
 }
 
@@ -63,12 +84,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
+        <NavSecondary items={data.navSecondary} className="mt-auto" />
+
       </SidebarContent>
       <SidebarFooter>
   <div className="flex items-center justify-between w-full px-2 py-1 text-sm text-muted-foreground">
-    <span>
-      Made with <span className="text-red-500">❤️</span> by <strong>Jihed Bouazizi</strong>
-    </span>
+    
     <ModeToggle />
   </div>
 </SidebarFooter>
