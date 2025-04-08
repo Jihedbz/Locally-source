@@ -22,6 +22,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import GlobalAlert from "./components/Structure/globalAlert";
 function App() {
 
 
@@ -68,6 +69,7 @@ function App() {
       </SidebarInset>
     </SidebarProvider>
     </Router>
+    <GlobalAlert /> 
   </ThemeProvider>
   );
 }

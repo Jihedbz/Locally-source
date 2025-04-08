@@ -1,5 +1,6 @@
 import * as React from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { appDataDir, join } from "@tauri-apps/api/path"; // Import 'join'
 
 interface ProjectDetailsProps {
   selectedProject: any;
@@ -8,6 +9,7 @@ interface ProjectDetailsProps {
 const ProjectDetails: React.FC<ProjectDetailsProps> = ({ selectedProject }) => {
   const [lastModified, setLastModified] = React.useState<Date | null>(null);
   const [folderSize, setFolderSize] = React.useState<string>("Calculating...");
+  const [shortenedPath, setShortenedPath] = React.useState<string>(""); // New state for the short path
 
   // Function to get last modified date
   const getLastModifiedDate = async (dirPath: string) => {
@@ -21,22 +23,45 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ selectedProject }) => {
   };
 
   // Function to get folder size
-  const getFolderSize = async (path: string) => {
-    try {
-      const size = await invoke<number>("get_folder_size", { path });
-      if (size < 1024) setFolderSize(`${size} B`);
-      else if (size < 1024 * 1024) setFolderSize(`${(size / 1024).toFixed(2)} KB`);
-      else if (size < 1024 * 1024 * 1024) setFolderSize(`${(size / (1024 * 1024)).toFixed(2)} MB`);
-      else setFolderSize(`${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`);
-    } catch (err) {
-      console.error("Error getting folder size:", err);
-    }
-  };
+  const getFolderSize = async (path: string): Promise<string> => {
+      try {
+        const size = await invoke<number>("get_dir_size", { path });
+        return size ? `${(size / (1024 * 1024)).toFixed(2)} MB` : "0 MB";
+      } catch (error) {
+        console.error("Error fetching folder size:", error);
+        return "Error calculating size";
+      }
+    };
 
   React.useEffect(() => {
     if (selectedProject) {
       getLastModifiedDate(selectedProject.path).then(setLastModified);
-      getFolderSize(selectedProject.path);
+      getFolderSize(selectedProject.path).then((size) => setFolderSize(size));
+
+      const shortenPath = async (fullPath: string) => {
+        try {
+          const appDataDirPath = await appDataDir();
+          const projectsDirPath = await join(appDataDirPath, "projects");
+
+          // Normalize paths to use forward slashes for comparison
+          const normalizedFullPath = fullPath.replace(/\\/g, "/");
+          const normalizedProjectsDirPath = projectsDirPath.replace(/\\/g, "/");
+
+          if (normalizedFullPath.startsWith(normalizedProjectsDirPath)) {
+            const relativePath = normalizedFullPath.substring(normalizedProjectsDirPath.length);
+            setShortenedPath(`/projects${relativePath}`);
+          } else {
+            setShortenedPath(fullPath);
+          }
+        } catch (error) {
+          console.error("Error shortening path:", error);
+          setShortenedPath(fullPath);
+        }
+      };
+
+      shortenPath(selectedProject.path);
+    } else {
+      setShortenedPath("");
     }
   }, [selectedProject]);
 
@@ -48,7 +73,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ selectedProject }) => {
         <p className="text-gray-600">{selectedProject.type}</p>
 
         <p className="text-gray-600 font-medium">Path:</p>
-        <p className="text-gray-600 truncate">{selectedProject.path}</p>
+        <p className="text-gray-600 truncate">{shortenedPath}</p>
 
         <p className="text-gray-600 font-medium">Created At:</p>
         <p className="text-gray-600">{new Date(selectedProject.createdAt).toLocaleString()}</p>

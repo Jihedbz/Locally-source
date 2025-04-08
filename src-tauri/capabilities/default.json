@@ -18,15 +18,38 @@
     "fs:scope-appdata",
     "shell:allow-open", 
     "shell:default",
+    "shell:allow-spawn",
     {
       "identifier": "shell:allow-execute",
       "allow": [
         {
           "name": "exec-code",
           "cmd": "code.exe"
+        },
+        {
+          "name": "cmd",
+          "cmd": "cmd",
+          "args": true
+        },
+        {
+          "name": "exec-powershell",
+          "cmd": "powershell.exe",
+          "args": true
+        },
+        {
+          "name": "exec-sh",
+          "cmd": "sh",
+          "args": [
+            "-c",
+            {
+              "validator": "\\S+"
+            }
+          ]
         }
+        
       ]
     },
+    
     {
       "identifier": "fs:scope",
       "allow": [
