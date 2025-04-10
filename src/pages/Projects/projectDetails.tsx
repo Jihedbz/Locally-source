@@ -24,14 +24,14 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ selectedProject }) => {
 
   // Function to get folder size
   const getFolderSize = async (path: string): Promise<string> => {
-      try {
-        const size = await invoke<number>("get_dir_size", { path });
-        return size ? `${(size / (1024 * 1024)).toFixed(2)} MB` : "0 MB";
-      } catch (error) {
-        console.error("Error fetching folder size:", error);
-        return "Error calculating size";
-      }
-    };
+    try {
+      const size = await invoke<number>("get_dir_size", { path });
+      return size ? `${(size / (1024 * 1024)).toFixed(2)} MB` : "0 MB";
+    } catch (error) {
+      console.error("Error fetching folder size:", error);
+      return "Error calculating size";
+    }
+  };
 
   React.useEffect(() => {
     if (selectedProject) {
@@ -48,7 +48,9 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ selectedProject }) => {
           const normalizedProjectsDirPath = projectsDirPath.replace(/\\/g, "/");
 
           if (normalizedFullPath.startsWith(normalizedProjectsDirPath)) {
-            const relativePath = normalizedFullPath.substring(normalizedProjectsDirPath.length);
+            const relativePath = normalizedFullPath.substring(
+              normalizedProjectsDirPath.length
+            );
             setShortenedPath(`/projects${relativePath}`);
           } else {
             setShortenedPath(fullPath);
@@ -76,10 +78,14 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ selectedProject }) => {
         <p className="text-gray-600 truncate">{shortenedPath}</p>
 
         <p className="text-gray-600 font-medium">Created At:</p>
-        <p className="text-gray-600">{new Date(selectedProject.createdAt).toLocaleString()}</p>
+        <p className="text-gray-600">
+          {new Date(selectedProject.createdAt).toLocaleString()}
+        </p>
 
         <p className="text-gray-600 font-medium">Last Modified:</p>
-        <p className="text-gray-600">{lastModified ? lastModified.toLocaleString() : "N/A"}</p>
+        <p className="text-gray-600">
+          {lastModified ? lastModified.toLocaleString() : "N/A"}
+        </p>
 
         <p className="text-gray-600 font-medium">Size:</p>
         <p className="text-gray-600">{folderSize ? folderSize : "N/A"}</p>
