@@ -22,8 +22,8 @@ const Projects = () => {
     null
   );
   const navigate = useNavigate();
-  const [lastModified, setLastModified] = React.useState<Date | null>(null);
-  const [folderSize, setFolderSize] = React.useState<string>("Calculating...");
+  const [, setLastModified] = React.useState<Date | null>(null);
+  const [, setFolderSize] = React.useState<string>("Calculating...");
 
   // Load projects from file on startup
   React.useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { writeTextFile, readTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 import { appDataDir, join } from "@tauri-apps/api/path"; // Import 'join'
@@ -37,7 +37,6 @@ export function AddNextProjectDialog() {
     appRouter: false,
   });
 
-  const [alert, setAlert] = useState<{ type: "error" | "success"; message: string } | null>(null);
   const { show } = useAlertStore();
 
   const handleChange = (name: keyof FormState, value: boolean | string) => {
