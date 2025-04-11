@@ -2,7 +2,6 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { writeTextFile, readTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 import { appDataDir, join } from "@tauri-apps/api/path"; // Import 'join'
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,23 +18,12 @@ interface Project {
 
 interface FormState {
   name: string;
-  typescript: boolean;
-  eslint: boolean;
-  tailwind: boolean;
-  src: boolean;
-  turbopack: boolean;
-  appRouter: boolean;
+
 }
 
 export function AddAngularProjectDialog() {
   const [form, setForm] = useState<FormState>({
-    name: "",
-    typescript: false,
-    eslint: false,
-    tailwind: false,
-    src: false,
-    turbopack: false,
-    appRouter: false,
+    name: ""
   });
 
   const { show } = useAlertStore();
@@ -75,7 +63,7 @@ export function AddAngularProjectDialog() {
 
       await saveProject(newProject);
       show('success', "Project created at /projects");
-      setForm({ name: "", typescript: false, eslint: false, tailwind: false, src: false, turbopack: false, appRouter: false });
+      setForm({ name: ""});
     } catch (error) {
       console.error("Failed to save project:", error);
       show('error', error instanceof Error ? error.message : String(error));
@@ -118,14 +106,6 @@ export function AddAngularProjectDialog() {
     }
 };
 
-  const options: { label: string; field: keyof FormState; description: string }[] = [
-    { label: "TypeScript", field: "typescript", description: "Initialize as a TypeScript project" },
-    { label: "ESLint", field: "eslint", description: "Initialize with ESLint config" },
-    { label: "Tailwind CSS", field: "tailwind", description: "Initialize with Tailwind CSS config" },
-    { label: "Src/", field: "src", description: "Initialize inside a 'src/' directory" },
-    { label: "Turbopack", field: "turbopack", description: "Enable Turbopack by default for development" },
-    { label: "AppRouter", field: "appRouter", description: "Initialize as an App Router project" },
-  ];
 
   return (
     <div className="w-full max-w-3xl px-6 mx-auto space-y-8">

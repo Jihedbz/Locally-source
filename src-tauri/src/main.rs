@@ -9,6 +9,7 @@ use tauri::AppHandle;
 use std::sync::Mutex;
 use tauri::Manager;
 use std::time::UNIX_EPOCH;
+
 static PROJECTS_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
 
 #[command]
