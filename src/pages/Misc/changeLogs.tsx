@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import Newspaper from "lucide-react";
 export type ChangelogEntry = {
   version: string;
   date: string;

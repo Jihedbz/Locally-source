@@ -7,6 +7,7 @@ import Projects from "./pages/Projects/main";
 import Settings from "./pages/Settings/main";
 import Tools from "./pages/Tools/main";
 import CreateNext from "./pages/Projects/addNextProjectDialog";
+import CreateAngular from "./pages/Projects/addAngularProjectDialog"
 import { Changelogs } from "./pages/Misc/changeLogs";
 import {
   Breadcrumb,
@@ -62,6 +63,8 @@ function App() {
                   <Route path="/tools" element={<Tools />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/nextjs" element={<CreateNext />} />
+                  <Route path="/angular" element={<CreateAngular />} />
+
                   <Route path="/changelogs" element={<Changelogs />} />
                 </Routes>
               </main>

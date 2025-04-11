@@ -10,7 +10,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuSub,
 } from "@/components/ui/dropdown-menu";
-import { FolderOpen, Pin, Trash2, Play, Trash, Recycle } from "lucide-react";
+import { FolderOpen, Pin, Trash2, Play, Recycle } from "lucide-react";
 import { writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 import { useAlertStore } from "@/store/alertStore";
 import React from "react";
@@ -29,7 +29,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
 }) => {
   const PROJECTS_FILE = "projects/projects.json";
   const { show } = useAlertStore();
-  const [os, setOs] = React.useState<string | null>(null);
+  const [, setOs] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const getOperatingSystem = async () => {
@@ -65,6 +65,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
   const handleOpenInExplorer = async (path: string) => {
     try {
       const result = await invoke<string>("open_in_explorer", { path });
+      console.log(result);
       console.log(`Opening ${project.name} in Explorer at: ${path}`);
       show("success", `Opened "${project.name}" in Explorer.`);
     } catch (error) {
@@ -77,6 +78,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
   const handleOpenInVSCode = async (path: string) => {
     try {
       const result = await invoke<string>("open_in_vscode", { path });
+      console.log(result);
       console.log(`Opening ${project.name} in VSCode at: ${path}`);
       show("success", `Opened "${project.name}" in VSCode.`);
     } catch (error) {
@@ -92,6 +94,8 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
   const handleOpenTerminal = async (path: string) => {
     try {
       const result = await invoke<string>("open_terminal", { path });
+      console.log(result);
+
       console.log(`Opening terminal in: ${path}`);
       show("success", `Opened terminal in "${path}".`);
     } catch (error) {
@@ -210,14 +214,6 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
         <DropdownMenuItem disabled>
           <i className="mr-2 devicon-npm-original-wordmark"></i>
           Npm
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <i className="mr-2 devicon-docker-plain"></i>
-          Docker
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled>
-          <i className="mr-2 devicon-git-plain"></i>
-          Git
         </DropdownMenuItem>
 
         <DropdownMenuItem onClick={() => handleDeleteProject(project)}>

@@ -9,7 +9,6 @@ use tauri::AppHandle;
 use std::sync::Mutex;
 use tauri::Manager;
 use std::time::UNIX_EPOCH;
-
 static PROJECTS_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
 
 #[command]
@@ -330,8 +329,18 @@ fn open_terminal(path: String) -> Result<String, String> {
             .args(["/C", "start", "cmd.exe", "/K", &format!("cd /d \"{}\"", path)])
             .spawn()
     } else if cfg!(target_os = "macos") {
-        Command::new("open")
-            .args(["-a", "Terminal", &path])
+        // Create an AppleScript that opens Terminal and runs a cd command
+        let apple_script = format!(
+            "tell application \"Terminal\"\n\
+             do script \"cd '{}'\" \n\
+             activate\n\
+             end tell",
+            path.replace("'", "'\\''") // Escape single quotes for AppleScript
+        );
+        
+        Command::new("osascript")
+            .arg("-e")
+            .arg(apple_script)
             .spawn()
     } else if cfg!(target_os = "linux") {
         // Try to determine which terminal emulator to use
@@ -455,25 +464,45 @@ async fn create_next_project(
             return Err(format!("Failed to create project directory: {}", e));
         }
 
-        let mut args = vec![name.clone()];
+        let mut args: Vec<String> = vec![];
+        // Handle all yes/no options explicitly
         if typescript == "yes" {
             args.push("--typescript".into());
+        } else if typescript == "no" {
+            args.push("--javascript".into());
         }
-        if eslint == "no" {
+        
+        if eslint == "yes" {
+            args.push("--eslint".into());
+        } else if eslint == "no" {
             args.push("--no-eslint".into());
         }
-        if tailwind == "no" {
+        
+        if tailwind == "yes" {
+            args.push("--tailwind".into());
+        } else if tailwind == "no" {
             args.push("--no-tailwind".into());
         }
+        
         if src == "yes" {
             args.push("--src-dir".into());
+        } else if src == "no" {
+            args.push("--no-src-dir".into());
         }
+        
         if app_router == "yes" {
             args.push("--app".into());
+        } else if app_router == "no" {
+            args.push("--no-app".into());  // Use pages router if app router is "no"
         }
+        
         if turbopack == "yes" {
-            args.push("--turbo".into());
+            args.push("--turbopack".into());
+        } else if turbopack == "no" {
+            args.push("--no-turbopack".into());
         }
+        
+        // Always add these flags
         args.push("--no-import-alias".into());
         args.push("--skip-install".into());
 
@@ -483,40 +512,34 @@ async fn create_next_project(
             "npx"
         };
 
-        let mut cmd = Command::new(command_str);
-        cmd.arg("create-next-app@latest")
+        println!("Running command: {} create-next-app@latest {} {} in {:?}", 
+                 command_str, 
+                 name, 
+                 args.join(" "), 
+                 &project_path);
+
+        // Create a command that inherits stdio to prevent hanging
+        let output = Command::new(command_str)
+            .arg("create-next-app@latest")
+            .arg(&name)
             .args(&args)
             .current_dir(&project_path)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stdin(Stdio::inherit())  // Allow stdin for any interactive prompts
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .output()
+            .map_err(|e| format!("Failed to execute command: {}", e))?;
 
-        println!("Running command: {} {} in {:?}", command_str, args.join(" "), &project_path);
-
-        match cmd.spawn() {
-            Ok(child) => {
-                match child.wait_with_output() {
-                    Ok(output) => {
-                        if output.status.success() {
-                            Ok(format!("Project '{}' created successfully.", name))
-                        } else {
-                            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                            eprintln!("Project creation failed:\nSTDOUT: {}\nSTDERR: {}", stdout, stderr);
-                            Err(format!("Project creation failed:\n{}", stderr))
-                        }
-                    }
-                    Err(e) => Err(format!("Failed to wait for command output: {}", e)),
-                }
-            }
-            Err(e) => Err(format!("Failed to spawn command: {}", e)),
+        if output.status.success() {
+            Ok(format!("Project '{}' created successfully.", name))
+        } else {
+            let status_code = output.status.code().unwrap_or(-1);
+            Err(format!("Project creation failed with exit code: {}", status_code))
         }
     } else {
         Err("Projects path not initialized.".into())
     }
 }
-
-
-
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())

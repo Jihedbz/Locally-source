@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { writeTextFile, readTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 import { appDataDir, join } from "@tauri-apps/api/path"; // Import 'join'
@@ -14,6 +14,7 @@ interface Project {
   path: string;
   type: string;
   createdAt: string;
+  pinned: boolean;
 }
 
 interface FormState {
@@ -55,6 +56,10 @@ export function AddNextProjectDialog() {
       const appDataDirPath = await appDataDir();
       const baseProjectPath = await join(appDataDirPath, "projects"); // Use 'join' for path construction
       const fullProjectPath = await join(baseProjectPath, form.name); // Full path including project name
+      console.log("fullProjectPath:", fullProjectPath);
+      console.log("baseProjectPath:", baseProjectPath);
+      console.log("appDataDirPath:", appDataDirPath);
+
       const now = new Date().toISOString();
 
       const result = await invoke<string>("create_next_project", {
@@ -66,12 +71,14 @@ export function AddNextProjectDialog() {
         appRouter: form.appRouter ? "yes" : "no",
         turbopack: form.turbopack ? "yes" : "no",
       });
+      console.log(result)
 
       const newProject: Project = {
         name: form.name,
         path: fullProjectPath, // Use the full project path
         type: "Next",
         createdAt: now,
+        pinned: false
       };
 
       await saveProject(newProject);
@@ -87,25 +94,37 @@ export function AddNextProjectDialog() {
 
   const saveProject = async (project: Project) => {
     try {
-      const filePath = "projects/projects.json";
-      let projects: Project[] = [];
+        const filePath = "projects/projects.json";
+        const appDataDirPath = await appDataDir();
+        const fullFilePath = await join(appDataDirPath, filePath);
+        let projects: Project[] = [];
 
-      try {
-        const data = await readTextFile(filePath, { baseDir: BaseDirectory.AppData });
-        projects = JSON.parse(data);
-      } catch (error) {
-        if (!(error instanceof Error && error.message.includes("File not found"))) {
-          throw error;
+        console.log("Attempting to save project:", project);
+        console.log("Full file path for projects.json:", fullFilePath);
+
+        try {
+            const data = await readTextFile(filePath, { baseDir: BaseDirectory.AppData });
+            projects = JSON.parse(data);
+            console.log("Existing projects.json content:", projects);
+        } catch (readError) {
+            if (!(readError instanceof Error && readError.message.includes("File not found"))) {
+                console.error("Error reading projects.json:", readError);
+                show('error', readError instanceof Error ? readError.message : String(readError));
+                return;
+            }
+            console.log("projects.json not found, initializing empty array.");
         }
-      }
 
-      projects.push(project);
-      await writeTextFile(filePath, JSON.stringify(projects, null, 2), { baseDir: BaseDirectory.AppData, create: true });
-    } catch (error) {
-      show('error', error instanceof Error ? error.message : String(error));
-
+        projects.push(project);
+        const jsonData = JSON.stringify(projects, null, 2);
+        console.log("Saving to projects.json:", jsonData);
+        await writeTextFile(filePath, jsonData, { baseDir: BaseDirectory.AppData, create: true });
+        console.log("Project saved to projects.json successfully.");
+    } catch (writeError) {
+        console.error("Error writing to projects.json:", writeError);
+        show('error', writeError instanceof Error ? writeError.message : String(writeError));
     }
-  };
+};
 
   const options: { label: string; field: keyof FormState; description: string }[] = [
     { label: "TypeScript", field: "typescript", description: "Initialize as a TypeScript project" },
