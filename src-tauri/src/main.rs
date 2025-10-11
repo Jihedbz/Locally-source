@@ -1,14 +1,14 @@
+use once_cell::sync::Lazy;
 use std::env::consts;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use tauri::command;
-use tokio::task;
-use std::fs;
-use once_cell::sync::Lazy;
-use tauri::AppHandle;
 use std::sync::Mutex;
-use tauri::Manager;
 use std::time::UNIX_EPOCH;
+use tauri::command;
+use tauri::AppHandle;
+use tauri::Manager;
+use tokio::task;
 
 static PROJECTS_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
 
@@ -17,7 +17,7 @@ fn clean_project(path: String) -> Result<String, String> {
     if !Path::new(&path).exists() {
         return Err(format!("Path does not exist: {}", path));
     }
-    
+
     // Define common directories and files to clean
     let temp_dirs = vec![
         "node_modules",
@@ -26,7 +26,7 @@ fn clean_project(path: String) -> Result<String, String> {
         "build",
         ".next",
         ".nuxt",
-        "target",        // Rust build directory
+        "target", // Rust build directory
         "out",
         "coverage",
         ".pytest_cache",
@@ -39,24 +39,24 @@ fn clean_project(path: String) -> Result<String, String> {
         ".parcel-cache",
         ".webpack",
         "bin",
-        "obj",          // .NET build directories
-        "vendor",       // PHP/Composer dependencies
+        "obj",    // .NET build directories
+        "vendor", // PHP/Composer dependencies
         ".sass-cache",
         ".fusebox",
         ".dynamodb",
         ".serverless",
         ".terraform",
         ".terragrunt-cache",
-        ".gradle"
+        ".gradle",
     ];
-    
+
     // Files to clean (could be expanded)
     let temp_files = vec![
         ".DS_Store",
         "npm-debug.log*",
         "yarn-debug.log*",
         "yarn-error.log*",
-        "*.log"
+        "*.log",
     ];
 
     let mut total_cleaned = 0;
@@ -66,9 +66,16 @@ fn clean_project(path: String) -> Result<String, String> {
 
     // Clean directories
     for temp_dir in temp_dirs {
-        clean_recursive(&PathBuf::from(&path), temp_dir, &mut total_cleaned, &mut total_size, &mut cleaned_dirs, &mut errors);
+        clean_recursive(
+            &PathBuf::from(&path),
+            temp_dir,
+            &mut total_cleaned,
+            &mut total_size,
+            &mut cleaned_dirs,
+            &mut errors,
+        );
     }
-    
+
     // Clean specific files (this is a simple version, could be enhanced with glob patterns)
     if let Ok(entries) = fs::read_dir(&path) {
         for entry in entries.flatten() {
@@ -82,9 +89,14 @@ fn clean_project(path: String) -> Result<String, String> {
                                 if pattern.starts_with("*.") {
                                     let ext = pattern.split(".").nth(1).unwrap_or("");
                                     if file_name_str.ends_with(&format!(".{}", ext)) {
-                                        let file_size = fs::metadata(&entry_path).map(|m| m.len()).unwrap_or(0);
+                                        let file_size =
+                                            fs::metadata(&entry_path).map(|m| m.len()).unwrap_or(0);
                                         if let Err(e) = fs::remove_file(&entry_path) {
-                                            errors.push(format!("Failed to remove {}: {}", entry_path.display(), e));
+                                            errors.push(format!(
+                                                "Failed to remove {}: {}",
+                                                entry_path.display(),
+                                                e
+                                            ));
                                         } else {
                                             total_cleaned += 1;
                                             total_size += file_size;
@@ -93,9 +105,14 @@ fn clean_project(path: String) -> Result<String, String> {
                                     }
                                 }
                             } else if file_name_str == *pattern {
-                                let file_size = fs::metadata(&entry_path).map(|m| m.len()).unwrap_or(0);
+                                let file_size =
+                                    fs::metadata(&entry_path).map(|m| m.len()).unwrap_or(0);
                                 if let Err(e) = fs::remove_file(&entry_path) {
-                                    errors.push(format!("Failed to remove {}: {}", entry_path.display(), e));
+                                    errors.push(format!(
+                                        "Failed to remove {}: {}",
+                                        entry_path.display(),
+                                        e
+                                    ));
                                 } else {
                                     total_cleaned += 1;
                                     total_size += file_size;
@@ -128,8 +145,12 @@ fn clean_project(path: String) -> Result<String, String> {
         if errors.is_empty() {
             format!("Cleaned {} items ({})", total_cleaned, formatted_size)
         } else {
-            format!("Cleaned {} items ({}), but encountered {} errors", 
-                total_cleaned, formatted_size, errors.len())
+            format!(
+                "Cleaned {} items ({}), but encountered {} errors",
+                total_cleaned,
+                formatted_size,
+                errors.len()
+            )
         }
     } else if !errors.is_empty() {
         format!("Nothing cleaned. Encountered {} errors", errors.len())
@@ -142,17 +163,17 @@ fn clean_project(path: String) -> Result<String, String> {
 
 // Helper function to recursively search for and clean directories
 fn clean_recursive(
-    base_path: &Path, 
-    target_dir: &str, 
-    total_cleaned: &mut usize, 
+    base_path: &Path,
+    target_dir: &str,
+    total_cleaned: &mut usize,
     total_size: &mut u64,
     cleaned_dirs: &mut Vec<String>,
-    errors: &mut Vec<String>
+    errors: &mut Vec<String>,
 ) {
     if let Ok(entries) = fs::read_dir(base_path) {
         for entry in entries.flatten() {
             let path = entry.path();
-            
+
             // Check if this is a target directory to clean
             if path.is_dir() {
                 if let Some(dir_name) = path.file_name() {
@@ -160,7 +181,7 @@ fn clean_recursive(
                         if dir_name_str == target_dir {
                             // Calculate the size before removing
                             let dir_size = get_dir_size(&path);
-                            
+
                             // Try to remove the directory
                             if let Err(e) = fs::remove_dir_all(&path) {
                                 errors.push(format!("Failed to remove {}: {}", path.display(), e));
@@ -171,7 +192,14 @@ fn clean_recursive(
                             }
                         } else {
                             // Recursively search in subdirectories
-                            clean_recursive(&path, target_dir, total_cleaned, total_size, cleaned_dirs, errors);
+                            clean_recursive(
+                                &path,
+                                target_dir,
+                                total_cleaned,
+                                total_size,
+                                cleaned_dirs,
+                                errors,
+                            );
                         }
                     }
                 }
@@ -183,7 +211,7 @@ fn clean_recursive(
 #[tauri::command]
 fn get_dir_size(path: &Path) -> u64 {
     let mut size = 0;
-    
+
     if path.is_dir() {
         if let Ok(entries) = fs::read_dir(path) {
             for entry in entries.flatten() {
@@ -196,11 +224,9 @@ fn get_dir_size(path: &Path) -> u64 {
             }
         }
     }
-    
+
     size
 }
-
-
 
 // Function to initialize the projects path once
 fn init_project_path(handle: &AppHandle) {
@@ -231,14 +257,9 @@ fn get_project_path() -> Option<PathBuf> {
 
 #[command]
 fn get_operating_system() -> String {
-  let os = consts::OS;
-  os.to_string()
+    let os = consts::OS;
+    os.to_string()
 }
-
-
-
-
-
 
 #[command]
 fn get_last_modified(dir_path: String) -> Option<u64> {
@@ -266,7 +287,6 @@ fn get_last_modified(dir_path: String) -> Option<u64> {
     }
 }
 
-
 #[command]
 fn open_in_explorer(path: String) -> Result<String, String> {
     if !Path::new(&path).exists() {
@@ -274,17 +294,11 @@ fn open_in_explorer(path: String) -> Result<String, String> {
     }
 
     let result = if cfg!(target_os = "windows") {
-        Command::new("explorer")
-            .args(["/select,", &path])
-            .spawn()
+        Command::new("explorer").args(["/select,", &path]).spawn()
     } else if cfg!(target_os = "macos") {
-        Command::new("open")
-            .arg(&path)
-            .spawn()
+        Command::new("open").arg(&path).spawn()
     } else if cfg!(target_os = "linux") {
-        Command::new("xdg-open")
-            .arg(&path)
-            .spawn()
+        Command::new("xdg-open").arg(&path).spawn()
     } else {
         return Err("Unsupported operating system".to_string());
     };
@@ -302,13 +316,9 @@ fn open_in_vscode(path: String) -> Result<String, String> {
     }
 
     let result = if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/C", "code", &path])
-            .spawn()
+        Command::new("cmd").args(["/C", "code", &path]).spawn()
     } else if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
-        Command::new("code")
-            .arg(&path)
-            .spawn()
+        Command::new("code").arg(&path).spawn()
     } else {
         return Err("Unsupported operating system".to_string());
     };
@@ -327,7 +337,13 @@ fn open_terminal(path: String) -> Result<String, String> {
 
     let result = if cfg!(target_os = "windows") {
         Command::new("cmd")
-            .args(["/C", "start", "cmd.exe", "/K", &format!("cd /d \"{}\"", path)])
+            .args([
+                "/C",
+                "start",
+                "cmd.exe",
+                "/K",
+                &format!("cd /d \"{}\"", path),
+            ])
             .spawn()
     } else if cfg!(target_os = "macos") {
         // Create an AppleScript that opens Terminal and runs a cd command
@@ -338,22 +354,35 @@ fn open_terminal(path: String) -> Result<String, String> {
              end tell",
             path.replace("'", "'\\''") // Escape single quotes for AppleScript
         );
-        
+
         Command::new("osascript")
             .arg("-e")
             .arg(apple_script)
             .spawn()
     } else if cfg!(target_os = "linux") {
         // Try to determine which terminal emulator to use
-        if Command::new("which").arg("gnome-terminal").output().map(|output| output.status.success()).unwrap_or(false) {
+        if Command::new("which")
+            .arg("gnome-terminal")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+        {
             Command::new("gnome-terminal")
                 .args(["--working-directory", &path])
                 .spawn()
-        } else if Command::new("which").arg("konsole").output().map(|output| output.status.success()).unwrap_or(false) {
-            Command::new("konsole")
-                .args(["--workdir", &path])
-                .spawn()
-        } else if Command::new("which").arg("xterm").output().map(|output| output.status.success()).unwrap_or(false) {
+        } else if Command::new("which")
+            .arg("konsole")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+        {
+            Command::new("konsole").args(["--workdir", &path]).spawn()
+        } else if Command::new("which")
+            .arg("xterm")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+        {
             Command::new("xterm")
                 .args(["-e", &format!("cd {} && bash", path)])
                 .spawn()
@@ -382,7 +411,6 @@ fn delete_project(path: String) -> Result<String, String> {
     }
 }
 
-
 #[command]
 async fn create_angular_project(name: String, handle: AppHandle) -> Result<String, String> {
     // Debug: Log the received path
@@ -393,7 +421,6 @@ async fn create_angular_project(name: String, handle: AppHandle) -> Result<Strin
     let Some(path) = get_project_path() else {
         return Err("Failed to resolve app data directory".to_string());
     };
-
 
     println!("Received project path: {:?}", path);
 
@@ -432,16 +459,17 @@ async fn create_angular_project(name: String, handle: AppHandle) -> Result<Strin
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            println!("Project creation failed:\nSTDOUT: {}\nSTDERR: {}", stdout, stderr);
+            println!(
+                "Project creation failed:\nSTDOUT: {}\nSTDERR: {}",
+                stdout, stderr
+            );
             Err(format!("Error creating project: {}", stderr.trim()))
         }
-    }).await;
+    })
+    .await;
 
     result.map_err(|e| e.to_string())?
 }
-
-
-
 
 #[command]
 async fn create_next_project(
@@ -458,7 +486,10 @@ async fn create_next_project(
 
         // Check if the directory already exists
         if project_dir.exists() {
-            return Err(format!("Directory '{}' already exists. Please choose a different name.", name));
+            return Err(format!(
+                "Directory '{}' already exists. Please choose a different name.",
+                name
+            ));
         }
 
         if let Err(e) = fs::create_dir_all(&project_dir) {
@@ -472,40 +503,41 @@ async fn create_next_project(
         } else if typescript == "no" {
             args.push("--javascript".into());
         }
-        
+
         if eslint == "yes" {
             args.push("--eslint".into());
         } else if eslint == "no" {
             args.push("--no-eslint".into());
         }
-        
+
         if tailwind == "yes" {
             args.push("--tailwind".into());
         } else if tailwind == "no" {
             args.push("--no-tailwind".into());
         }
-        
+
         if src == "yes" {
             args.push("--src-dir".into());
         } else if src == "no" {
             args.push("--no-src-dir".into());
         }
-        
+
         if app_router == "yes" {
             args.push("--app".into());
         } else if app_router == "no" {
-            args.push("--no-app".into());  // Use pages router if app router is "no"
+            args.push("--no-app".into()); // Use pages router if app router is "no"
         }
-        
+
         if turbopack == "yes" {
             args.push("--turbopack".into());
         } else if turbopack == "no" {
             args.push("--no-turbopack".into());
         }
-        
+
         // Always add these flags
         args.push("--no-import-alias".into());
         args.push("--skip-install".into());
+        args.push("-y".into());
 
         let command_str = if cfg!(target_os = "windows") {
             "npx.cmd"
@@ -513,11 +545,13 @@ async fn create_next_project(
             "npx"
         };
 
-        println!("Running command: {} create-next-app@latest {} {} in {:?}", 
-                 command_str, 
-                 name, 
-                 args.join(" "), 
-                 &project_path);
+        println!(
+            "Running command: {} create-next-app@latest {} {} in {:?}",
+            command_str,
+            name,
+            args.join(" "),
+            &project_path
+        );
 
         // Create a command that inherits stdio to prevent hanging
         let output = Command::new(command_str)
@@ -525,7 +559,7 @@ async fn create_next_project(
             .arg(&name)
             .args(&args)
             .current_dir(&project_path)
-            .stdin(Stdio::inherit())  // Allow stdin for any interactive prompts
+            .stdin(Stdio::inherit()) // Allow stdin for any interactive prompts
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .output()
@@ -535,7 +569,10 @@ async fn create_next_project(
             Ok(format!("Project '{}' created successfully.", name))
         } else {
             let status_code = output.status.code().unwrap_or(-1);
-            Err(format!("Project creation failed with exit code: {}", status_code))
+            Err(format!(
+                "Project creation failed with exit code: {}",
+                status_code
+            ))
         }
     } else {
         Err("Projects path not initialized.".into())
@@ -543,6 +580,7 @@ async fn create_next_project(
 }
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -552,8 +590,18 @@ fn main() {
             init_project_path(&handle);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![create_angular_project, get_last_modified, create_next_project, get_operating_system, delete_project
-            , open_in_explorer, open_in_vscode, open_terminal, clean_project, get_dir_size])
+        .invoke_handler(tauri::generate_handler![
+            create_angular_project,
+            get_last_modified,
+            create_next_project,
+            get_operating_system,
+            delete_project,
+            open_in_explorer,
+            open_in_vscode,
+            open_terminal,
+            clean_project,
+            get_dir_size
+        ])
         .run(tauri::generate_context!())
         .expect("Error while running Tauri application");
 }

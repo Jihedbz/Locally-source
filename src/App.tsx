@@ -1,7 +1,7 @@
 import "./App.css";
 import { ThemeProvider } from "./components/ui/themeprovider";
 import { AppSidebar } from "./components/Structure/app-sidebar";
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import {Route, Routes, useLocation} from "react-router-dom";
 import Home from "./pages/Home/main";
 import Projects from "./pages/Projects/main";
 import Settings from "./pages/Settings/main";
@@ -24,15 +24,32 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import GlobalAlert from "./components/Structure/globalAlert";
+import React from "react";
+
 function App() {
+
+  const location = useLocation();
+  const pathnames = location.pathname.split("/").filter(Boolean);
+
+  const routeMap: Record<string, string> = {
+    "": "Home",
+    projects: "Projects",
+    tools: "Tools",
+    settings: "Settings",
+    nextjs: "Add Next.js Project",
+    angular: "Add Angular Project",
+    changelogs: "Changelogs",
+  }
+
+
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <link
-        rel="stylesheet"
-        type="text/css"
-        href="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/devicon.min.css"
-      />
-      <Router>
+      <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
+        <link
+            rel="stylesheet"
+            type="text/css"
+            href="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/devicon.min.css"
+        />
+        {/* no <Router> here anymore */}
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset>
@@ -40,18 +57,31 @@ function App() {
               <header className="h-16 flex items-center px-4">
                 <div className="flex items-center gap-2 px-4">
                   <SidebarTrigger className="-ml-1" />
-                  <Separator orientation="vertical" className="mr-2 h-4" />
+                  <Separator orientation="vertical" className="mr-2 h-4 bg-white !important" />
+
                   <Breadcrumb>
                     <BreadcrumbList>
-                      <BreadcrumbItem className="hidden md:block">
-                        <BreadcrumbLink href="#">
-                          Work in progress
-                        </BreadcrumbLink>
-                      </BreadcrumbItem>
-                      <BreadcrumbSeparator className="hidden md:block" />
                       <BreadcrumbItem>
-                        <BreadcrumbPage>work in progress</BreadcrumbPage>
+                        <BreadcrumbLink href="/">Home</BreadcrumbLink>
                       </BreadcrumbItem>
+                      {pathnames.map((segment, index) => {
+                        const to = `/${pathnames.slice(0, index + 1).join("/")}`;
+                        const isLast = index === pathnames.length - 1;
+                        const label = routeMap[segment] || segment;
+
+                        return (
+                            <React.Fragment key={to}>
+                              <BreadcrumbSeparator />
+                              <BreadcrumbItem>
+                                {isLast ? (
+                                    <BreadcrumbPage>{label}</BreadcrumbPage>
+                                ) : (
+                                    <BreadcrumbLink href={to}>{label}</BreadcrumbLink>
+                                )}
+                              </BreadcrumbItem>
+                            </React.Fragment>
+                        );
+                      })}
                     </BreadcrumbList>
                   </Breadcrumb>
                 </div>
@@ -64,16 +94,16 @@ function App() {
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/nextjs" element={<CreateNext />} />
                   <Route path="/angular" element={<CreateAngular />} />
-
                   <Route path="/changelogs" element={<Changelogs />} />
                 </Routes>
               </main>
             </div>
+
           </SidebarInset>
         </SidebarProvider>
-      </Router>
-      <GlobalAlert />
-    </ThemeProvider>
+        <GlobalAlert />
+
+      </ThemeProvider>
   );
 }
 

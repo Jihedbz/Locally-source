@@ -1,6 +1,9 @@
 import * as React from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path"; // Import 'join'
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import {Clipboard} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ProjectDetailsProps {
   selectedProject: any;
@@ -21,6 +24,15 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ selectedProject }) => {
       return null;
     }
   };
+
+  const copyPathClipboard = async (path: string) => {
+    try {
+      await writeText(path);
+      console.log("Path copied to clipboard:", path);
+    } catch (error) {
+      console.error("Error copying path to clipboard:", error);
+    }
+  }
 
   // Function to get folder size
   const getFolderSize = async (path: string): Promise<string> => {
@@ -74,8 +86,17 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ selectedProject }) => {
         <p className="text-gray-600 font-medium">Type:</p>
         <p className="text-gray-600">{selectedProject.type}</p>
 
+
         <p className="text-gray-600 font-medium">Path:</p>
-        <p className="text-gray-600 truncate">{shortenedPath}</p>
+        <div className="flex items-center space-x-2">
+          <p className="text-gray-600 truncate">{shortenedPath}</p>
+          <Button
+              variant="outline"
+              onClick={() => copyPathClipboard(selectedProject.path)}
+          >
+            <Clipboard className="h-4 w-4" />
+          </Button>
+        </div>
 
         <p className="text-gray-600 font-medium">Created At:</p>
         <p className="text-gray-600">

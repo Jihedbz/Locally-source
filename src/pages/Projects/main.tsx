@@ -1,14 +1,19 @@
-"use client";
+"use client"; // Indicates usage in a client-side React environment
+
+// Tauri's file system API for reading the projects file
 import { readTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
 import * as React from "react";
+
+// UI components
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Pin, Plus, Search } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
-import ProjectActions from "./projectsActions";
-import ProjectDetails from "./projectDetails";
-import { useNavigate } from "react-router-dom";
+// Used to call Rust backend commands
+import ProjectActions from "./projectsActions"; // Custom component for project-related actions (delete, pin, etc.)
+import ProjectDetails from "./projectDetails"; // Custom component to display project info
+import { useNavigate } from "react-router-dom"; // React Router for navigation
 
+// Dropdown UI
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -17,15 +22,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const Projects = () => {
-  const [projects, setProjects] = React.useState<any[]>([]);
+  const [projects, setProjects] = React.useState<any[]>([]); // List of all projects
   const [selectedProject, setSelectedProject] = React.useState<any | null>(
     null
-  );
+  ); // Currently selected project
   const navigate = useNavigate();
-  const [, setLastModified] = React.useState<Date | null>(null);
-  const [, setFolderSize] = React.useState<string>("Calculating...");
 
-  // Load projects from file on startup
+  // Load saved projects from the AppData directory on mount
   React.useEffect(() => {
     const loadProjects = async () => {
       try {
@@ -40,12 +43,12 @@ const Projects = () => {
     loadProjects();
   }, []);
 
+  // Handle selection of a project from the sidebar
   const handleProjectClick = (project: any) => {
     setSelectedProject(project);
-    setLastModified(null); // Reset previous data
-    setFolderSize("Calculating...");
   };
 
+  // Return a matching icon based on project type
   const getProjectIcon = (type: string) => {
     switch (type.toLowerCase()) {
       case "angular":
@@ -55,48 +58,23 @@ const Projects = () => {
       case "next":
         return <i className="devicon-nextjs-plain mr-2" />;
       default:
-        return <i className="devicon-code-plain mr-2" />; // Default icon
+        return <i className="devicon-code-plain mr-2" />;
     }
   };
 
-  const getLastModifiedDate = async (dirPath: string) => {
-    try {
-      const timestamp = await invoke<number>("get_last_modified", { dirPath });
-      return timestamp ? new Date(timestamp * 1000) : null;
-    } catch (error) {
-      console.error("Error fetching last modified date:", error);
-      return null;
-    }
-  };
 
-  const getFolderSize = async (path: string): Promise<string> => {
-    try {
-      const size = await invoke<number>("get_dir_size", { path });
-      if (size < 1024) return `${size} B`;
-      else if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KB`;
-      else if (size < 1024 * 1024 * 1024)
-        return `${(size / (1024 * 1024)).toFixed(2)} MB`;
-      else return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-    } catch (error) {
-      console.error("Error getting folder size:", error);
-      return "Error calculating size";
-    }
-  };
 
-  React.useEffect(() => {
-    if (selectedProject) {
-      getLastModifiedDate(selectedProject.path).then(setLastModified);
-      getFolderSize(selectedProject.path).then(setFolderSize);
-    }
-  }, [selectedProject]);
+
+
 
   return (
     <div className="flex flex-1 min-h-[calc(100vh-4rem)] p-6">
       <div className="flex h-full w-full p-6 ">
-        {/* Left Sidebar: Project List */}
+        {/* Sidebar: Project list + Add project menu */}
         <div className="w-1/4 max-w-xs border-r p-4 overflow-y-auto flex flex-col items-center justify-start">
           <h2 className="text-lg font-bold mb-4">Projects</h2>
 
+          {/* Add Project dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger>
               <Button variant="outline">
@@ -104,6 +82,7 @@ const Projects = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-48">
+              {/* Different project types; some disabled for now */}
               <DropdownMenuItem disabled onClick={() => navigate("/locate")}>
                 <Search className="mr-2 h-4 w-4" />
                 Locate
@@ -136,6 +115,8 @@ const Projects = () => {
           </DropdownMenu>
 
           <Separator className="my-5" />
+
+          {/* Render the project list */}
           <ul>
             {projects.map((project) => (
               <li key={project.name} className="mb-2 relative">
@@ -157,17 +138,18 @@ const Projects = () => {
           </ul>
         </div>
 
-        {/* Right Panel: Project Details */}
+        {/* Main Panel: Project Details */}
         <div
           className="flex-1 p-6 overflow-y-auto"
           style={{
-            minHeight: '300px', // Adjust this value as needed
-            display: 'flex',
-            flexDirection: 'column',
+            minHeight: "300px",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
           {selectedProject ? (
             <div>
+              {/* Project Header */}
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <div className="flex flex-row items-center">
@@ -180,11 +162,11 @@ const Projects = () => {
                         selectedProject.name.slice(1)}
                     </h2>
                   </div>
-                  <ProjectDetails
-                    selectedProject={selectedProject}
-                  />
+                  <ProjectDetails selectedProject={selectedProject} />
                 </div>
-                <div className="flex justify-end items-center ml-auto ">
+
+                {/* Action buttons (e.g., delete/pin) */}
+                <div className="flex justify-end items-center ml-auto">
                   <ProjectActions
                     project={selectedProject}
                     projects={projects}
@@ -194,6 +176,7 @@ const Projects = () => {
               </div>
             </div>
           ) : (
+            // Empty state when no project is selected
             <div className="text-gray-500 text-center text-lg flex-grow flex items-center justify-center">
               🌟 Pick a project to explore its details!
             </div>

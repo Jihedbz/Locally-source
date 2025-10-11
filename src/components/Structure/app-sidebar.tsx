@@ -1,11 +1,9 @@
 import * as React from "react"
 import {
-  GalleryVerticalEnd,
   Settings2,
   Home, FolderDot, Wrench, LifeBuoy, Send,
   Newspaper
 } from "lucide-react"
-import { ModeToggle } from "@/components/ui/modeToggle";
 
 
 import { NavMain } from "@/components/Structure/nav-main"
@@ -18,6 +16,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { NavSecondary } from "./nav-secondary";
+import {ModeToggle} from "@/components/ui/modeToggle.tsx";
 
 // This is sample data.
 const data = {
@@ -29,7 +28,7 @@ const data = {
   teams:
     {
       name: "Locally",
-      logo: GalleryVerticalEnd,
+      logo: "src-tauri/icons/128x128@2x.png",
       plan: "Early Alpha",
     },
   navMain: [
@@ -89,8 +88,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarFooter>
   <div className="flex items-center justify-between w-full px-2 py-1 text-sm text-muted-foreground">
-    
     <ModeToggle />
+
   </div>
 </SidebarFooter>
       <SidebarRail />

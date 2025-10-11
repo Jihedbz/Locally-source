@@ -1,3 +1,4 @@
+// Button and dropdown UI components
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,12 +11,20 @@ import {
   DropdownMenuGroup,
   DropdownMenuSub,
 } from "@/components/ui/dropdown-menu";
-import { FolderOpen, Pin, Trash2, Play, Recycle } from "lucide-react";
-import { writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
-import { useAlertStore } from "@/store/alertStore";
-import React from "react";
-import { invoke } from "@tauri-apps/api/core";
 
+// Icons used in the dropdown
+import { FolderOpen, Pin, Trash2, Play, Recycle } from "lucide-react";
+
+// Tauri APIs to write files
+import { writeTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
+
+// Alert store for showing feedback messages to the user
+import { useAlertStore } from "@/store/alertStore";
+
+import React from "react";
+import { invoke } from "@tauri-apps/api/core"; // Used to call backend Rust commands
+
+// Props expected by ProjectActions component
 type ProjectActionsProps = {
   project: any;
   projects: any[];
@@ -27,10 +36,11 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
   projects,
   setProjects,
 }) => {
-  const PROJECTS_FILE = "projects/projects.json";
-  const { show } = useAlertStore();
+  const PROJECTS_FILE = "projects/projects.json"; // Path to projects JSON file in AppData
+  const { show } = useAlertStore(); // Alert function from global store
   const [, setOs] = React.useState<string | null>(null);
 
+  // Detect the current operating system using a Rust command
   React.useEffect(() => {
     const getOperatingSystem = async () => {
       try {
@@ -41,19 +51,16 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
         setOs("unknown");
       }
     };
-
     getOperatingSystem();
   }, []);
 
-  // Save projects after any update
+  // Save the updated project list to file
   const saveProjects = async (updatedProjects: any[]) => {
     try {
       await writeTextFile(
         PROJECTS_FILE,
         JSON.stringify(updatedProjects, null, 2),
-        {
-          baseDir: BaseDirectory.AppData,
-        }
+        { baseDir: BaseDirectory.AppData }
       );
     } catch (error) {
       console.error("Failed to save project list:", error);
@@ -61,12 +68,11 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
     }
   };
 
-  // Open project in Explorer using Rust command
+  // Open the project directory in Explorer/Finder
   const handleOpenInExplorer = async (path: string) => {
     try {
       const result = await invoke<string>("open_in_explorer", { path });
       console.log(result);
-      console.log(`Opening ${project.name} in Explorer at: ${path}`);
       show("success", `Opened "${project.name}" in Explorer.`);
     } catch (error) {
       console.error("Failed to open in Explorer:", error);
@@ -74,12 +80,11 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
     }
   };
 
-  // Open project in VSCode using Rust command
+  // Open the project folder in VSCode
   const handleOpenInVSCode = async (path: string) => {
     try {
       const result = await invoke<string>("open_in_vscode", { path });
       console.log(result);
-      console.log(`Opening ${project.name} in VSCode at: ${path}`);
       show("success", `Opened "${project.name}" in VSCode.`);
     } catch (error) {
       console.error("Failed to open in VSCode:", error);
@@ -90,13 +95,11 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
     }
   };
 
-  // Open terminal using Rust command
+  // Open a terminal in the project folder
   const handleOpenTerminal = async (path: string) => {
     try {
       const result = await invoke<string>("open_terminal", { path });
       console.log(result);
-
-      console.log(`Opening terminal in: ${path}`);
       show("success", `Opened terminal in "${path}".`);
     } catch (error) {
       console.error("Failed to open terminal:", error);
@@ -104,7 +107,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
     }
   };
 
-  // Clean project - remove temporary files and directories
+  // Clean the project (remove node_modules, dist, build, etc.)
   const handleCleanProject = async (path: string) => {
     try {
       const confirmed = confirm(
@@ -115,31 +118,43 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
       const result = await invoke<string>("clean_project", { path });
       console.log(`Cleaned project at: ${path}`);
       show("success", result);
+      await getFolderSize(path);
     } catch (error) {
       console.error("Failed to clean project:", error);
       show("error", `Failed to clean "${project.name}": ${error}`);
     }
   };
 
-  // Toggle Pin project
+  const getFolderSize = async (path: string): Promise<string> => {
+    try {
+      const size = await invoke<number>("get_dir_size", { path });
+      return size ? `${(size / (1024 * 1024)).toFixed(2)} MB` : "0 MB";
+    } catch (error) {
+      console.error("Error fetching folder size:", error);
+      return "Error calculating size";
+    }
+  };
+
+  // Pin or unpin the project
   const togglePinProject = (projectName: string) => {
     const updatedProjects = projects.map((p) =>
       p.name === projectName ? { ...p, pinned: !p.pinned } : p
     );
-    updatedProjects.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); // Move pinned projects to top
+
+    // Move pinned projects to the top
+    updatedProjects.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
     setProjects(updatedProjects);
     saveProjects(updatedProjects);
+
+    const pinned = updatedProjects.find((p) => p.name === projectName)?.pinned;
     show(
       "success",
-      `Project "${projectName}" ${
-        updatedProjects.find((p) => p.name === projectName)?.pinned
-          ? "pinned"
-          : "unpinned"
-      }.`
+      `Project "${projectName}" ${pinned ? "pinned" : "unpinned"}.`
     );
   };
 
-  // Delete project using Rust command
+  // Delete project permanently
   const handleDeleteProject = async (project: any) => {
     const confirmed = confirm(
       `Are you sure you want to delete ${project.name}?`
@@ -167,6 +182,7 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuGroup>
+          {/* Open options (Explorer, VSCode, Terminal) */}
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>Open with</DropdownMenuSubTrigger>
             <DropdownMenuPortal>
@@ -177,14 +193,12 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
                   <FolderOpen className="mr-2" />
                   Explorer
                 </DropdownMenuItem>
-
                 <DropdownMenuItem
                   onClick={() => handleOpenInVSCode(project.path)}
                 >
                   <i className="devicon-vscode-plain mr-2" />
                   Vs Code
                 </DropdownMenuItem>
-
                 <DropdownMenuItem
                   onClick={() => handleOpenTerminal(project.path)}
                 >
@@ -196,26 +210,49 @@ const ProjectActions: React.FC<ProjectActionsProps> = ({
           </DropdownMenuSub>
         </DropdownMenuGroup>
 
+        {/* Toggle pin */}
         <DropdownMenuItem onClick={() => togglePinProject(project.name)}>
           <Pin className="mr-2" />
           {project.pinned ? "Unpin" : "Pin"}
         </DropdownMenuItem>
+
+        {/* Placeholder: not yet implemented */}
         <DropdownMenuItem>
           <Play className="mr-2" />
           Start
         </DropdownMenuItem>
 
-        {/* New Clean Project option */}
+        {/* Clean project */}
         <DropdownMenuItem onClick={() => handleCleanProject(project.path)}>
           <Recycle className="mr-2" />
           Clean
         </DropdownMenuItem>
 
-        <DropdownMenuItem disabled>
-          <i className="mr-2 devicon-npm-original-wordmark"></i>
-          Npm
-        </DropdownMenuItem>
+        {/* Disabled option for future NPM actions */}
+        <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <i className="mr-5 devicon-npm-original-wordmark" />
+              Npm
+            </DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem disabled>
+                  <i className="devicon-npm-original-wordmark mr-2" />
+                  Install
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <i className="devicon-npm-original-wordmark mr-2" />
+                  Update
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <i className="devicon-npm-original-wordmark mr-2" />
+                  Uninstall
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+        </DropdownMenuSub>
 
+        {/* Delete project */}
         <DropdownMenuItem onClick={() => handleDeleteProject(project)}>
           <Trash2 className="mr-2" />
           Delete

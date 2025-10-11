@@ -29,6 +29,7 @@ export function NavMain({
                 <a href={item.url}>
                   <item.icon />
                   <span>{item.title}</span>
+
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
