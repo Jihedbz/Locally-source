@@ -1,190 +1,243 @@
-"use client"; // Indicates usage in a client-side React environment
+'use client'
 
-// Tauri's file system API for reading the projects file
-import { readTextFile, BaseDirectory } from "@tauri-apps/plugin-fs";
-import * as React from "react";
-
-// UI components
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Pin, Plus, Search } from "lucide-react";
-// Used to call Rust backend commands
-import ProjectActions from "./projectsActions"; // Custom component for project-related actions (delete, pin, etc.)
-import ProjectDetails from "./projectDetails"; // Custom component to display project info
-import { useNavigate } from "react-router-dom"; // React Router for navigation
-
-// Dropdown UI
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
+import { useCallback, useEffect, memo } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Pin, Plus, Search, FolderOpen, Sparkles, Filter, Grid3X3, List } from 'lucide-react'
+import ProjectActions from './projectsActions'
+import ProjectDetails from './projectDetails'
+import { useNavigate } from 'react-router-dom'
+import { Project } from '@/types/project'
+import { useProjectStore } from '@/store/projectStore'
+import { useProjects } from '@/hooks/useProjects'
+import { getProjectIcon, getProjectColor } from '@/lib/projectUtils'
 
 const Projects = () => {
-  const [projects, setProjects] = React.useState<any[]>([]); // List of all projects
-  const [selectedProject, setSelectedProject] = React.useState<any | null>(
-    null
-  ); // Currently selected project
-  const navigate = useNavigate();
+  const navigate = useNavigate()
+  const { searchQuery, setSearchQuery, viewMode, setViewMode } = useProjectStore()
+  const { 
+    filteredProjects, 
+    selectedProject, 
+    setSelectedProject, 
+    loadProjects 
+  } = useProjects()
 
-  // Load saved projects from the AppData directory on mount
-  React.useEffect(() => {
-    const loadProjects = async () => {
-      try {
-        const data = await readTextFile("projects/projects.json", {
-          baseDir: BaseDirectory.AppData,
-        });
-        setProjects(JSON.parse(data));
-      } catch (error) {
-        console.log("No projects found, initializing empty list.");
-      }
-    };
-    loadProjects();
-  }, []);
+  useEffect(() => {
+    loadProjects()
+  }, [loadProjects])
 
-  // Handle selection of a project from the sidebar
-  const handleProjectClick = (project: any) => {
-    setSelectedProject(project);
-  };
+  const handleProjectClick = useCallback((project: Project) => {
+    setSelectedProject(project)
+  }, [setSelectedProject])
 
-  // Return a matching icon based on project type
-  const getProjectIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case "angular":
-        return <i className="devicon-angularjs-plain colored mr-2" />;
-      case "react":
-        return <i className="devicon-react-original colored mr-2" />;
-      case "next":
-        return <i className="devicon-nextjs-plain mr-2" />;
-      default:
-        return <i className="devicon-code-plain mr-2" />;
-    }
-  };
+  const ProjectCard = memo(({ project }: { project: Project }) => (
+    <Card
+      className={`hover-lift cursor-pointer transition-all duration-300 shadow-sm ${getProjectColor(project.type)} border bg-background/70 ${
+        selectedProject?.name === project.name ? 'ring-2 ring-primary' : 'border-opacity-80'
+      }`}
+      onClick={() => handleProjectClick(project)}
+    >
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary/10 text-secondary">
+              {getProjectIcon(project.type)}
+            </div>
+            <div>
+              <CardTitle className="text-lg">{project.name}</CardTitle>
+              <CardDescription className="capitalize">{project.type}</CardDescription>
+            </div>
+          </div>
+          {project.pinned && (
+            <Badge variant="secondary" className="rounded-full px-3 py-1 text-xs font-semibold">
+              <Pin className="mr-1 h-3.5 w-3.5" />
+              Pinned
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-3 text-sm text-muted-foreground">
+          <div className="rounded-2xl bg-muted/50 p-3">{project.path}</div>
+          <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-muted-foreground/80">
+            <span>
+              {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
+            </span>
+            <span>{project.type.toUpperCase()}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  ))
 
-
-
-
-
+  const ProjectListItem = memo(({ project }: { project: Project }) => (
+    <Card
+      className={`hover-lift cursor-pointer transition-all duration-300 shadow-sm ${getProjectColor(project.type)} border bg-background/70 ${
+        selectedProject?.name === project.name ? 'ring-2 ring-primary' : 'border-opacity-80'
+      }`}
+      onClick={() => handleProjectClick(project)}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/40 text-muted-foreground">
+              {getProjectIcon(project.type)}
+            </div>
+            <div>
+              <h3 className="font-semibold text-base">{project.name}</h3>
+              <p className="text-sm text-muted-foreground capitalize">{project.type}</p>
+            </div>
+          </div>
+          <div className="text-right text-sm text-muted-foreground">
+            <p>{new Date(project.createdAt || Date.now()).toLocaleDateString()}</p>
+            {project.pinned && <Badge variant="secondary">Pinned</Badge>}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  ))
 
   return (
-    <div className="flex flex-1 min-h-[calc(100vh-4rem)] p-6">
-      <div className="flex h-full w-full p-6 ">
-        {/* Sidebar: Project list + Add project menu */}
-        <div className="w-1/4 max-w-xs border-r p-4 overflow-y-auto flex flex-col items-center justify-start">
-          <h2 className="text-lg font-bold mb-4">Projects</h2>
-
-          {/* Add Project dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger>
-              <Button variant="outline">
-                <Plus className="mr-2 h-4 w-4" /> Add a Project
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-48">
-              {/* Different project types; some disabled for now */}
-              <DropdownMenuItem disabled onClick={() => navigate("/locate")}>
-                <Search className="mr-2 h-4 w-4" />
-                Locate
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/nextjs")}>
-                <i className="devicon-nextjs-plain mr-2"></i>
-                Nextjs
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/angular")}>
-                <i className="devicon-angularjs-plain colored mr-2"></i>
-                Angular
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled onClick={() => navigate("/reactjs")}>
-                <i className="devicon-react-plain colored mr-2"></i>
-                ReactJs
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled onClick={() => navigate("/vuejs")}>
-                <i className="devicon-vuejs-plain colored mr-2"></i>
-                VueJs
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled onClick={() => navigate("/symfony")}>
-                <i className="devicon-symfony-plain mr-2"></i>
-                Symfony
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled onClick={() => navigate("/laravel")}>
-                <i className="devicon-laravel-plain colored mr-2"></i>
-                Laravel
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Separator className="my-5" />
-
-          {/* Render the project list */}
-          <ul>
-            {projects.map((project) => (
-              <li key={project.name} className="mb-2 relative">
-                <Button
-                  variant="ghost"
-                  className="text-left w-full flex items-center justify-between"
-                  onClick={() => handleProjectClick(project)}
-                >
-                  <div className="flex items-center w-full">
-                    {getProjectIcon(project.type)}
-                    <span className="truncate">{project.name}</span>
-                  </div>
-                  {project.pinned && (
-                    <Pin className="h-5 w-5 text-yellow-500 ml-2" />
-                  )}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Main Panel: Project Details */}
-        <div
-          className="flex-1 p-6 overflow-y-auto"
-          style={{
-            minHeight: "300px",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {selectedProject ? (
-            <div>
-              {/* Project Header */}
-              <div className="flex justify-between items-start mb-4">
+    <div className="flex-1 p-6">
+      <div className="grid gap-6 xl:grid-cols-[1.5fr_0.9fr]">
+        <div className="space-y-6">
+          <Card className="border border-border/70 bg-background/80 shadow-sm">
+            <CardContent className="space-y-6 p-6">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="flex flex-row items-center">
-                    {getProjectIcon(selectedProject.type)}
-                    <h2
-                      className="text-2xl font-bold truncate"
-                      style={{ maxWidth: "250px" }}
-                    >
-                      {selectedProject.name.charAt(0).toUpperCase() +
-                        selectedProject.name.slice(1)}
-                    </h2>
-                  </div>
-                  <ProjectDetails selectedProject={selectedProject} />
+                  <p className="text-sm uppercase tracking-[0.22em] text-muted-foreground">
+                    Projects
+                  </p>
+                  <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
+                    Project Center
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                    Create, browse and manage your development workspaces with an intelligent
+                    dashboard and modern action flow.
+                  </p>
                 </div>
-
-                {/* Action buttons (e.g., delete/pin) */}
-                <div className="flex justify-end items-center ml-auto">
-                  <ProjectActions
-                    project={selectedProject}
-                    projects={projects}
-                    setProjects={setProjects}
-                  />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Button size="lg" onClick={() => navigate('/nextjs')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Next.js
+                  </Button>
+                  <Button variant="outline" size="lg" onClick={() => navigate('/angular')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    New Angular
+                  </Button>
                 </div>
               </div>
-            </div>
-          ) : (
-            // Empty state when no project is selected
-            <div className="text-gray-500 text-center text-lg flex-grow flex items-center justify-center">
-              🌟 Pick a project to explore its details!
-            </div>
-          )}
+
+              <div className="grid gap-4 xl:grid-cols-[1fr_0.7fr]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search projects..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-11"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant={viewMode === 'grid' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('grid')}
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('list')}
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" className="ml-auto">
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filter
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-4">
+            {filteredProjects.length === 0 ? (
+              <Card className="border border-border/70 bg-muted/40 p-8 text-center shadow-sm">
+                <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full bg-background shadow-sm">
+                  <FolderOpen className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <div className="mt-6 space-y-3">
+                  <h3 className="text-xl font-semibold">No projects yet</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Start a new project or use the quick create buttons above to populate your
+                    workspace.
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-3 pt-2">
+                    <Button size="sm" onClick={() => navigate('/nextjs')}>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Next.js Starter
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => navigate('/angular')}>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Angular Starter
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ) : (
+              <div
+                className={
+                  viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : 'space-y-3'
+                }
+              >
+                {filteredProjects.map((project) =>
+                  viewMode === 'grid' ? (
+                    <ProjectCard key={project.name} project={project} />
+                  ) : (
+                    <ProjectListItem key={project.name} project={project} />
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <Card className="border border-border/70 bg-background/80 shadow-sm">
+            <CardHeader>
+              <div className="space-y-2">
+                <p className="text-sm uppercase tracking-[0.22em] text-muted-foreground">
+                  Details panel
+                </p>
+                <CardTitle className="text-lg">Selected project</CardTitle>
+                <CardDescription>
+                  Select a project to review its metadata, open tools, and run workspace actions.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {selectedProject ? (
+                <div className="space-y-4">
+                  <ProjectActions />
+                  <ProjectDetails />
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-dashed border-border/50 bg-muted/40 p-8 text-center">
+                  <p className="text-muted-foreground">
+                    Click a project card to see its full details here.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default Projects;
+export default Projects
