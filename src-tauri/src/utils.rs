@@ -107,7 +107,143 @@ pub fn execute_command(cmd: &str, args: &[&str], current_dir: Option<&Path>) -> 
     }
 }
 
+/// Launch a detached process without blocking.
+pub fn launch_detached(cmd: &str, args: &[&str], current_dir: Option<&Path>) -> AppResult<String> {
+    let mut command = Command::new(cmd);
+
+    if let Some(dir) = current_dir {
+        command.current_dir(dir);
+    }
+
+    command.args(args);
+
+    command.spawn().map_err(|e| {
+        AppError::CommandFailed(format!("Failed to launch '{}': {}", cmd, e))
+    })?;
+
+    Ok(format!("Launched '{}'", cmd))
+}
+
 /// Get operating system name
 pub fn get_operating_system() -> String {
     std::env::consts::OS.to_string()
 }
+
+use std::collections::HashMap;
+use std::process::Child;
+use std::sync::{Arc, Mutex};
+
+#[derive(Default, Clone)]
+pub struct ProcessManager {
+    processes: Arc<Mutex<HashMap<String, Arc<Mutex<Option<Child>>>>>>,
+}
+
+impl ProcessManager {
+    pub fn register(&self, id: String, child: Child) -> Arc<Mutex<Option<Child>>> {
+        let child_arc = Arc::new(Mutex::new(Some(child)));
+        if let Ok(mut guard) = self.processes.lock() {
+            guard.insert(id, Arc::clone(&child_arc));
+        }
+        child_arc
+    }
+
+    pub fn unregister(&self, id: &str) {
+        if let Ok(mut guard) = self.processes.lock() {
+            guard.remove(id);
+        }
+    }
+
+    pub fn cancel(&self, id: &str) -> bool {
+        let child_arc = {
+            let Ok(guard) = self.processes.lock() else {
+                return false;
+            };
+            guard.get(id).cloned()
+        };
+
+        if let Some(child_arc) = child_arc {
+            if let Ok(mut guard) = child_arc.lock() {
+                if let Some(mut child) = guard.take() {
+                    let _ = child.kill();
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
+/// Formats npm error messages into human-readable descriptions
+pub fn format_npm_error(stderr: &str) -> String {
+    let stderr_trimmed = stderr.trim();
+    let stderr_lower = stderr_trimmed.to_lowercase();
+
+    if stderr_lower.contains("enotfound")
+        || stderr_lower.contains("eai_again")
+        || stderr_lower.contains("getaddrinfo")
+        || stderr_lower.contains("fetch failed")
+        || stderr_lower.contains("offline")
+        || stderr_lower.contains("network")
+        || stderr_lower.contains("etimeout")
+        || stderr_lower.contains("err_socket_timeout")
+    {
+        "npm registry is unreachable or offline. Please check your network connection.".to_string()
+    } else if stderr_lower.contains("e404") || stderr_lower.contains("not found - 404") {
+        "Package or package version not found on npm registry.".to_string()
+    } else if stderr_lower.contains("einvalidpackagename") {
+        "Invalid npm package name or format.".to_string()
+    } else if stderr_lower.contains("enoent") && stderr_lower.contains("package.json") {
+        "package.json was not found in the project directory.".to_string()
+    } else if stderr_lower.contains("is not recognized as an internal or external command")
+        || stderr_lower.contains("command not found")
+        || stderr_lower.contains("no such file or directory")
+    {
+        "npm command was not found. Please ensure Node.js and npm are installed and added to system PATH.".to_string()
+    } else if !stderr_trimmed.is_empty() {
+        stderr_trimmed
+            .lines()
+            .find(|line| line.starts_with("npm ERR!"))
+            .unwrap_or(stderr_trimmed)
+            .to_string()
+    } else {
+        "An unexpected npm error occurred.".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_offline_errors() {
+        let err = format_npm_error("npm ERR! code ENOTFOUND\nnpm ERR! syscall getaddrinfo");
+        assert!(err.contains("unreachable or offline"));
+    }
+
+    #[test]
+    fn formats_not_found_package_errors() {
+        let err = format_npm_error("npm ERR! code E404\nnpm ERR! 404 Not Found - GET https://registry.npmjs.org/nonexistent");
+        assert!(err.contains("not found on npm registry"));
+    }
+
+    #[test]
+    fn formats_missing_npm_command_errors() {
+        let err = format_npm_error("'npm' is not recognized as an internal or external command");
+        assert!(err.contains("npm command was not found"));
+    }
+
+    #[test]
+    fn formats_bytes_correctly() {
+        assert_eq!(format_size(500), "500 B");
+        assert_eq!(format_size(1024), "1.00 KB");
+        assert_eq!(format_size(1024 * 1024), "1.00 MB");
+        assert_eq!(format_size(1024 * 1024 * 1024), "1.00 GB");
+    }
+
+    #[test]
+    fn launch_detached_handles_invalid_command() {
+        let result = launch_detached("non_existent_binary_12345", &[], None);
+        assert!(result.is_err());
+    }
+}
+

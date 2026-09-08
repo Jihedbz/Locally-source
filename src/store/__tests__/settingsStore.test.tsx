@@ -14,6 +14,9 @@ describe('Settings Store', () => {
     expect(settings.theme).toBe('system')
     expect(settings.defaultProjectPath).toBe('')
     expect(settings.preferredEditor).toBe('vscode')
+    expect(settings.customEditorPath).toBe('')
+    expect(settings.preferredTerminal).toBe('default')
+    expect(settings.customTerminalPath).toBe('')
     expect(settings.autoCheckUpdates).toBe(true)
     expect(settings.sidebarCollapsed).toBe(false)
   })
@@ -25,12 +28,20 @@ describe('Settings Store', () => {
       theme: 'dark',
       defaultProjectPath: '/home/user/projects',
       sidebarCollapsed: true,
+      preferredEditor: 'cursor',
+      customEditorPath: '/usr/local/bin/cursor',
+      preferredTerminal: 'custom',
+      customTerminalPath: '/usr/bin/alacritty',
     })
 
     const updatedSettings = useSettingsStore.getState()
     expect(updatedSettings.theme).toBe('dark')
     expect(updatedSettings.defaultProjectPath).toBe('/home/user/projects')
     expect(updatedSettings.sidebarCollapsed).toBe(true)
+    expect(updatedSettings.preferredEditor).toBe('cursor')
+    expect(updatedSettings.customEditorPath).toBe('/usr/local/bin/cursor')
+    expect(updatedSettings.preferredTerminal).toBe('custom')
+    expect(updatedSettings.customTerminalPath).toBe('/usr/bin/alacritty')
   })
 
   it('should reset to defaults', () => {
@@ -40,6 +51,7 @@ describe('Settings Store', () => {
     store.updateSettings({
       theme: 'light',
       preferredEditor: 'webstorm',
+      preferredTerminal: 'custom',
     })
 
     // Then reset
@@ -48,5 +60,6 @@ describe('Settings Store', () => {
     const resetSettings = useSettingsStore.getState()
     expect(resetSettings.theme).toBe('system')
     expect(resetSettings.preferredEditor).toBe('vscode')
+    expect(resetSettings.preferredTerminal).toBe('default')
   })
 })

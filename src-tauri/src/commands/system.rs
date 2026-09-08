@@ -1,5 +1,5 @@
 use crate::types::{AppError, AppResult};
-use crate::utils::{execute_command, get_operating_system};
+use crate::utils::{get_operating_system, launch_detached};
 use std::path::Path;
 use tauri::command;
 
@@ -33,11 +33,11 @@ pub fn open_in_explorer(path: String) -> AppResult<String> {
     }
 
     let result = if cfg!(target_os = "windows") {
-        execute_command("explorer", &["/select,", &path], None)
+        launch_detached("explorer", &["/select,", &path], None)
     } else if cfg!(target_os = "macos") {
-        execute_command("open", &[&path], None)
+        launch_detached("open", &[&path], None)
     } else if cfg!(target_os = "linux") {
-        execute_command("xdg-open", &[&path], None)
+        launch_detached("xdg-open", &[&path], None)
     } else {
         return Err(AppError::CommandFailed(
             "Unsupported operating system".to_string(),
@@ -48,8 +48,17 @@ pub fn open_in_explorer(path: String) -> AppResult<String> {
 }
 
 #[command]
-pub fn open_in_vscode(path: String) -> AppResult<String> {
-    log::info!("Opening VSCode at: {}", path);
+pub fn open_in_vscode(
+    path: String,
+    editor: Option<String>,
+    custom_editor_path: Option<String>,
+) -> AppResult<String> {
+    log::info!(
+        "Opening editor at: {} (editor: {:?}, custom: {:?})",
+        path,
+        editor,
+        custom_editor_path
+    );
     if !Path::new(&path).exists() {
         return Err(AppError::PathNotFound(format!(
             "Path does not exist: {}",
@@ -57,22 +66,59 @@ pub fn open_in_vscode(path: String) -> AppResult<String> {
         )));
     }
 
-    let result = if cfg!(target_os = "windows") {
-        execute_command("cmd", &["/C", "code", &path], None)
-    } else if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
-        execute_command("code", &[&path], None)
+    let editor_type = editor.as_deref().unwrap_or("vscode");
+
+    let result = if editor_type == "custom" {
+        if let Some(custom_path) = custom_editor_path.as_deref().filter(|s| !s.trim().is_empty()) {
+            launch_detached(custom_path, &[&path], None)
+        } else {
+            Err(AppError::CommandFailed(
+                "Custom editor path is not configured".to_string(),
+            ))
+        }
+    } else if cfg!(target_os = "windows") {
+        let binary = match editor_type {
+            "cursor" => "cursor",
+            "webstorm" => "webstorm",
+            _ => "code",
+        };
+        launch_detached("cmd", &["/C", "start", "", binary, &path], None)
+    } else if cfg!(target_os = "macos") {
+        let (app_name, cli_cmd) = match editor_type {
+            "cursor" => ("Cursor", "cursor"),
+            "webstorm" => ("WebStorm", "webstorm"),
+            _ => ("Visual Studio Code", "code"),
+        };
+        launch_detached("open", &["-a", app_name, &path], None)
+            .or_else(|_| launch_detached(cli_cmd, &[&path], None))
+    } else if cfg!(target_os = "linux") {
+        let binary = match editor_type {
+            "cursor" => "cursor",
+            "webstorm" => "webstorm",
+            _ => "code",
+        };
+        launch_detached(binary, &[&path], None)
     } else {
         return Err(AppError::CommandFailed(
             "Unsupported operating system".to_string(),
         ));
     };
 
-    result.map(|_| format!("Opened VSCode at {}", path))
+    result.map(|_| format!("Opened editor at {}", path))
 }
 
 #[command]
-pub fn open_terminal(path: String) -> AppResult<String> {
-    log::info!("Opening terminal at: {}", path);
+pub fn open_terminal(
+    path: String,
+    terminal: Option<String>,
+    custom_terminal_path: Option<String>,
+) -> AppResult<String> {
+    log::info!(
+        "Opening terminal at: {} (terminal: {:?}, custom: {:?})",
+        path,
+        terminal,
+        custom_terminal_path
+    );
     if !Path::new(&path).exists() {
         return Err(AppError::PathNotFound(format!(
             "Path does not exist: {}",
@@ -80,8 +126,18 @@ pub fn open_terminal(path: String) -> AppResult<String> {
         )));
     }
 
-    let result = if cfg!(target_os = "windows") {
-        execute_command(
+    let terminal_type = terminal.as_deref().unwrap_or("default");
+
+    let result = if terminal_type == "custom" {
+        if let Some(custom_path) = custom_terminal_path.as_deref().filter(|s| !s.trim().is_empty()) {
+            launch_detached(custom_path, &[], Some(Path::new(&path)))
+        } else {
+            Err(AppError::CommandFailed(
+                "Custom terminal path is not configured".to_string(),
+            ))
+        }
+    } else if cfg!(target_os = "windows") {
+        launch_detached(
             "cmd",
             &[
                 "/C",
@@ -93,29 +149,20 @@ pub fn open_terminal(path: String) -> AppResult<String> {
             None,
         )
     } else if cfg!(target_os = "macos") {
-        // Create an AppleScript that opens Terminal and runs a cd command
         let apple_script = format!(
             "tell application \"Terminal\"\n\
              do script \"cd '{}'\" \n\
              activate\n\
              end tell",
-            path.replace("'", "'\\''") // Escape single quotes for AppleScript
+            path.replace('\'', "'\\''")
         );
-
-        execute_command("osascript", &["-e", &apple_script], None)
+        launch_detached("osascript", &["-e", &apple_script], None)
     } else if cfg!(target_os = "linux") {
-        // Try to determine which terminal emulator to use
-        if execute_command("which", &["gnome-terminal"], None).is_ok() {
-            execute_command("gnome-terminal", &["--working-directory", &path], None)
-        } else if execute_command("which", &["konsole"], None).is_ok() {
-            execute_command("konsole", &["--workdir", &path], None)
-        } else if execute_command("which", &["xterm"], None).is_ok() {
-            execute_command("xterm", &["-e", &format!("cd {} && bash", path)], None)
-        } else {
-            return Err(AppError::CommandFailed(
-                "No supported terminal emulator found".to_string(),
-            ));
-        }
+        launch_detached("gnome-terminal", &["--working-directory", &path], None)
+            .or_else(|_| launch_detached("konsole", &["--workdir", &path], None))
+            .or_else(|_| {
+                launch_detached("xterm", &["-e", &format!("cd \"{}\" && bash", path)], None)
+            })
     } else {
         return Err(AppError::CommandFailed(
             "Unsupported operating system".to_string(),

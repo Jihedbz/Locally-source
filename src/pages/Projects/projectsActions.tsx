@@ -24,12 +24,15 @@ import { useAlertStore } from '@/store/alertStore'
 import { tauriCommands, useTauriErrorHandler } from '@/lib/tauriUtils'
 import { Project } from '@/types/project'
 import { useProjectStore } from '@/store/projectStore'
+import { useSettingsStore } from '@/store/settingsStore'
 
 const ProjectActions: React.FC = () => {
   const { show } = useAlertStore()
   const { handleError } = useTauriErrorHandler()
   const navigate = useNavigate()
   const { projects, saveProjects, setSelectedProject, selectedProject: project } = useProjectStore()
+  const { preferredEditor, customEditorPath, preferredTerminal, customTerminalPath } =
+    useSettingsStore()
   const [busyAction, setBusyAction] = useState<string | null>(null)
 
   const handleOpenInExplorer = useCallback(
@@ -54,16 +57,24 @@ const ProjectActions: React.FC = () => {
       if (!project) return
       setBusyAction('vscode')
       try {
-        await tauriCommands.openInVSCode(path)
-        show('success', `Opened ${project.name} in VS Code.`)
+        await tauriCommands.openInVSCode(path, preferredEditor, customEditorPath)
+        const editorLabel =
+          preferredEditor === 'cursor'
+            ? 'Cursor'
+            : preferredEditor === 'webstorm'
+              ? 'WebStorm'
+              : preferredEditor === 'custom'
+                ? 'custom editor'
+                : 'VS Code'
+        show('success', `Opened ${project.name} in ${editorLabel}.`)
       } catch (error) {
-        const message = handleError(error, 'opening in VS Code')
-        show('error', `Failed to open ${project.name} in VS Code: ${message}`)
+        const message = handleError(error, 'opening in editor')
+        show('error', `Failed to open ${project.name} in editor: ${message}`)
       } finally {
         setBusyAction(null)
       }
     },
-    [project, show, handleError]
+    [project, preferredEditor, customEditorPath, show, handleError]
   )
 
   const handleOpenTerminal = useCallback(
@@ -71,7 +82,7 @@ const ProjectActions: React.FC = () => {
       if (!project) return
       setBusyAction('terminal')
       try {
-        await tauriCommands.openTerminal(path)
+        await tauriCommands.openTerminal(path, preferredTerminal, customTerminalPath)
         show('success', `Opened terminal in ${project.name}.`)
       } catch (error) {
         const message = handleError(error, 'opening terminal')
@@ -80,7 +91,7 @@ const ProjectActions: React.FC = () => {
         setBusyAction(null)
       }
     },
-    [project, show, handleError]
+    [project, preferredTerminal, customTerminalPath, show, handleError]
   )
 
   const handleCleanProject = useCallback(
@@ -155,6 +166,15 @@ const ProjectActions: React.FC = () => {
   const actionIcon = (action: string, icon: React.ReactNode) =>
     busyAction === action ? <Loader2 className="h-4 w-4 animate-spin" /> : icon
 
+  const editorTitle =
+    preferredEditor === 'cursor'
+      ? 'Open in Cursor'
+      : preferredEditor === 'webstorm'
+        ? 'Open in WebStorm'
+        : preferredEditor === 'custom'
+          ? 'Open in custom editor'
+          : 'Open in VS Code'
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-4 gap-2">
@@ -181,8 +201,8 @@ const ProjectActions: React.FC = () => {
         <Button
           variant="outline"
           size="icon"
-          title="Open in VS Code"
-          aria-label="Open in VS Code"
+          title={editorTitle}
+          aria-label={editorTitle}
           disabled={isBusy}
           onClick={() => handleOpenInVSCode(project.path)}
         >

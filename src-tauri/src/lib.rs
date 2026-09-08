@@ -6,6 +6,7 @@ pub mod utils;
 
 pub use types::*;
 pub use utils::*;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -36,6 +37,7 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle();
             let _ = commands::projects::init_project_path(&handle);
+            app.manage(utils::ProcessManager::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -45,12 +47,15 @@ pub fn run() {
             commands::projects::create_next_project,
             commands::projects::delete_project,
             commands::projects::get_dir_size_command,
+            commands::projects::check_npm_availability,
+            commands::projects::init_package_json,
             commands::projects::get_npm_packages,
             commands::projects::search_npm_packages,
             commands::projects::get_npm_package_metadata,
             commands::projects::install_npm_package,
             commands::projects::update_npm_package,
             commands::projects::remove_npm_package,
+            commands::projects::cancel_npm_install,
             commands::system::get_operating_system_command,
             commands::system::open_in_explorer,
             commands::system::open_in_vscode,

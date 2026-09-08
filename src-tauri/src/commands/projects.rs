@@ -1,11 +1,11 @@
 use crate::types::{AppError, AppResult};
-use crate::utils::{execute_command, get_dir_size};
+use crate::utils::{execute_command, format_npm_error, get_dir_size, ProcessManager};
 use once_cell::sync::Lazy;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::{command, AppHandle, Manager};
+use tauri::{command, AppHandle, Manager, State};
 use tokio::task;
 
 static PROJECTS_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
@@ -189,7 +189,72 @@ fn npm_command() -> &'static str {
 
 fn execute_npm(path: &Path, args: Vec<String>) -> AppResult<String> {
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    execute_command(npm_command(), &arg_refs, Some(path))
+    execute_command(npm_command(), &arg_refs, Some(path)).map_err(|e| {
+        let err_msg = match e {
+            AppError::CommandFailed(ref s) => format_npm_error(s),
+            _ => e.to_string(),
+        };
+        AppError::CommandFailed(err_msg)
+    })
+}
+
+#[command]
+pub async fn check_npm_availability() -> AppResult<crate::types::NpmAvailability> {
+    task::spawn_blocking(move || {
+        let npm = npm_command();
+        let version_output = std::process::Command::new(npm).arg("--version").output();
+        match version_output {
+            Err(_) => Ok(crate::types::NpmAvailability {
+                installed: false,
+                version: None,
+                online: false,
+                message: Some("npm executable was not found. Please install Node.js and npm.".to_string()),
+            }),
+            Ok(output) if !output.status.success() => Ok(crate::types::NpmAvailability {
+                installed: false,
+                version: None,
+                online: false,
+                message: Some("npm command failed to run.".to_string()),
+            }),
+            Ok(output) => {
+                let ver = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let ping_output = std::process::Command::new(npm).arg("ping").output();
+                let online = ping_output
+                    .as_ref()
+                    .map(|out| out.status.success())
+                    .unwrap_or(false);
+                let message = if online {
+                    Some("npm is available and online.".to_string())
+                } else {
+                    Some("npm is available, but the registry is unreachable (offline).".to_string())
+                };
+
+                Ok(crate::types::NpmAvailability {
+                    installed: true,
+                    version: if ver.is_empty() { None } else { Some(ver) },
+                    online,
+                    message,
+                })
+            }
+        }
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[command]
+pub async fn init_package_json(path: String) -> AppResult<String> {
+    let project_path = get_managed_project_path(&path)?;
+    task::spawn_blocking(move || {
+        let package_json = project_path.join("package.json");
+        if package_json.exists() {
+            return Ok("package.json already exists".to_string());
+        }
+
+        execute_npm(&project_path, vec!["init".to_string(), "-y".to_string()])
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
 }
 
 #[command]
@@ -197,6 +262,11 @@ pub async fn get_npm_packages(path: String) -> AppResult<Vec<crate::types::NpmPa
     let project_path = get_managed_project_path(&path)?;
     task::spawn_blocking(move || {
         let package_json = project_path.join("package.json");
+        if !package_json.exists() {
+            return Err(AppError::FileNotFound(
+                "package.json not found in project directory".to_string(),
+            ));
+        }
         let content = fs::read_to_string(package_json).map_err(AppError::Io)?;
         let manifest: Value = serde_json::from_str(&content)?;
         let mut packages = Vec::new();
@@ -329,40 +399,212 @@ pub async fn get_npm_package_metadata(
     .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
 }
 
+fn execute_npm_with_progress(
+    handle: &AppHandle,
+    process_mgr: &ProcessManager,
+    install_id: Option<&str>,
+    path: &Path,
+    args: Vec<String>,
+) -> AppResult<String> {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use tauri::Emitter;
+
+    let mut command = std::process::Command::new(npm_command());
+    command.current_dir(path);
+    command.args(&args);
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+
+    let child = command.spawn().map_err(|e| {
+        AppError::CommandFailed(format_npm_error(&e.to_string()))
+    })?;
+
+    let id = install_id.map(String::from);
+    let child_arc = id.as_ref().map(|id_str| process_mgr.register(id_str.clone(), child));
+
+    let (stdout_opt, stderr_opt) = if let Some(ref arc) = child_arc {
+        if let Ok(mut guard) = arc.lock() {
+            if let Some(ref mut c) = *guard {
+                (c.stdout.take(), c.stderr.take())
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        }
+    } else {
+        (None, None)
+    };
+
+    let handle_clone1 = handle.clone();
+    let id_clone1 = id.clone();
+    let stdout_handle = stdout_opt.map(|out| {
+        std::thread::spawn(move || {
+            let reader = BufReader::new(out);
+            let mut lines = Vec::new();
+            for line in reader.lines().flatten() {
+                if let Some(ref install_id) = id_clone1 {
+                    let _ = handle_clone1.emit(
+                        "npm-install-progress",
+                        crate::types::NpmProgressPayload {
+                            install_id: install_id.clone(),
+                            line: line.clone(),
+                            stream: "stdout".to_string(),
+                        },
+                    );
+                }
+                lines.push(line);
+            }
+            lines.join("\n")
+        })
+    });
+
+    let handle_clone2 = handle.clone();
+    let id_clone2 = id.clone();
+    let stderr_handle = stderr_opt.map(|err| {
+        std::thread::spawn(move || {
+            let reader = BufReader::new(err);
+            let mut lines = Vec::new();
+            for line in reader.lines().flatten() {
+                if let Some(ref install_id) = id_clone2 {
+                    let _ = handle_clone2.emit(
+                        "npm-install-progress",
+                        crate::types::NpmProgressPayload {
+                            install_id: install_id.clone(),
+                            line: line.clone(),
+                            stream: "stderr".to_string(),
+                        },
+                    );
+                }
+                lines.push(line);
+            }
+            lines.join("\n")
+        })
+    });
+
+    let stdout_str = stdout_handle.and_then(|h| h.join().ok()).unwrap_or_default();
+    let stderr_str = stderr_handle.and_then(|h| h.join().ok()).unwrap_or_default();
+
+    let exit_status = if let Some(ref arc) = child_arc {
+        if let Ok(mut guard) = arc.lock() {
+            if let Some(ref mut c) = *guard {
+                c.wait().ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Some(ref id_str) = id {
+        process_mgr.unregister(id_str);
+    }
+
+    match exit_status {
+        Some(status) if status.success() => Ok(stdout_str),
+        Some(_) => {
+            let combined = format!("{}\n{}", stdout_str, stderr_str);
+            Err(AppError::CommandFailed(format_npm_error(&combined)))
+        }
+        None => {
+            let combined = format!("{}\n{}", stdout_str, stderr_str);
+            if combined.contains("killed") || combined.is_empty() {
+                Err(AppError::CommandFailed("Operation was cancelled by user.".to_string()))
+            } else {
+                Err(AppError::CommandFailed(format_npm_error(&combined)))
+            }
+        }
+    }
+}
+
 #[command]
 pub async fn install_npm_package(
     path: String,
     package: String,
     version: Option<String>,
     dev: bool,
+    install_id: Option<String>,
+    handle: AppHandle,
+    process_mgr: State<'_, ProcessManager>,
 ) -> AppResult<String> {
     let project_path = get_managed_project_path(&path)?;
-    let package_spec = format!(
-        "{}@{}",
-        package,
-        version.unwrap_or_else(|| "latest".to_string())
-    );
+    let package_spec = if let Some(ver) = version {
+        if ver.trim().is_empty() {
+            package
+        } else {
+            format!("{}@{}", package, ver)
+        }
+    } else {
+        package
+    };
     let mut args = vec!["install".to_string()];
     if dev {
         args.push("--save-dev".to_string());
     }
     args.push(package_spec);
-    task::spawn_blocking(move || execute_npm(&project_path, args))
-        .await
-        .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+
+    let pm = process_mgr.inner().clone();
+    task::spawn_blocking(move || {
+        execute_npm_with_progress(&handle, &pm, install_id.as_deref(), &project_path, args)
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
 }
 
 #[command]
-pub async fn update_npm_package(path: String, package: String) -> AppResult<String> {
-    install_npm_package(path, package, Some("latest".to_string()), false).await
+pub async fn update_npm_package(
+    path: String,
+    package: String,
+    install_id: Option<String>,
+    handle: AppHandle,
+    process_mgr: State<'_, ProcessManager>,
+) -> AppResult<String> {
+    install_npm_package(
+        path,
+        package,
+        Some("latest".to_string()),
+        false,
+        install_id,
+        handle,
+        process_mgr,
+    )
+    .await
 }
 
 #[command]
-pub async fn remove_npm_package(path: String, package: String) -> AppResult<String> {
+pub async fn remove_npm_package(
+    path: String,
+    package: String,
+    install_id: Option<String>,
+    handle: AppHandle,
+    process_mgr: State<'_, ProcessManager>,
+) -> AppResult<String> {
     let project_path = get_managed_project_path(&path)?;
-    task::spawn_blocking(move || execute_npm(&project_path, vec!["uninstall".to_string(), package]))
-        .await
-        .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+    let pm = process_mgr.inner().clone();
+    task::spawn_blocking(move || {
+        execute_npm_with_progress(
+            &handle,
+            &pm,
+            install_id.as_deref(),
+            &project_path,
+            vec!["uninstall".to_string(), package],
+        )
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[command]
+pub async fn cancel_npm_install(
+    install_id: String,
+    process_mgr: State<'_, ProcessManager>,
+) -> AppResult<bool> {
+    let cancelled = process_mgr.cancel(&install_id);
+    Ok(cancelled)
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use crate::commands::projects::get_managed_project_path;
 use crate::types::AppResult;
-use crate::utils::get_dir_size;
+use crate::utils::{format_size, get_dir_size};
 use std::fs;
 use std::path::Path;
 use tauri::command;
@@ -121,19 +121,6 @@ pub fn clean_project(path: String) -> AppResult<String> {
                     }
                 }
             }
-        }
-    }
-
-    // Format size in human-readable format
-    fn format_size(size: u64) -> String {
-        if size < 1024 {
-            format!("{} B", size)
-        } else if size < 1024 * 1024 {
-            format!("{:.2} KB", size as f64 / 1024.0)
-        } else if size < 1024 * 1024 * 1024 {
-            format!("{:.2} MB", size as f64 / (1024.0 * 1024.0))
-        } else {
-            format!("{:.2} GB", size as f64 / (1024.0 * 1024.0 * 1024.0))
         }
     }
 

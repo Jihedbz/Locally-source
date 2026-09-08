@@ -37,6 +37,24 @@ pub struct NpmPackageMetadata {
     pub repository: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NpmAvailability {
+    pub installed: bool,
+    pub version: Option<String>,
+    pub online: bool,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NpmProgressPayload {
+    pub install_id: String,
+    pub line: String,
+    pub stream: String,
+}
+
+
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error("IO error: {0}")]

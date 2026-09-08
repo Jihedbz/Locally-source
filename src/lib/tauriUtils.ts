@@ -27,6 +27,19 @@ export interface NpmPackageMetadata {
   repository?: string
 }
 
+export interface NpmAvailability {
+  installed: boolean
+  version?: string
+  online: boolean
+  message?: string
+}
+
+export interface NpmProgressPayload {
+  installId: string
+  line: string
+  stream: 'stdout' | 'stderr'
+}
+
 export class TauriCommandError extends Error implements TauriError {
   public code?: string
   public command?: string
@@ -129,9 +142,11 @@ export const tauriCommands = {
 
   openInExplorer: (path: string) => invokeWithErrorHandling<string>('open_in_explorer', { path }),
 
-  openInVSCode: (path: string) => invokeWithErrorHandling<string>('open_in_vscode', { path }),
+  openInVSCode: (path: string, editor?: string, customEditorPath?: string) =>
+    invokeWithErrorHandling<string>('open_in_vscode', { path, editor, customEditorPath }),
 
-  openTerminal: (path: string) => invokeWithErrorHandling<string>('open_terminal', { path }),
+  openTerminal: (path: string, terminal?: string, customTerminalPath?: string) =>
+    invokeWithErrorHandling<string>('open_terminal', { path, terminal, customTerminalPath }),
 
   cleanProject: (path: string) => invokeWithErrorHandling<string>('clean_project', { path }),
 
@@ -142,6 +157,10 @@ export const tauriCommands = {
     invokeWithErrorHandling<number | null>('get_last_modified', { dirPath }),
 
   getDirSize: (path: string) => invokeWithErrorHandling<number>('get_dir_size', { path }),
+
+  checkNpmAvailability: () => invokeWithErrorHandling<NpmAvailability>('check_npm_availability'),
+
+  initPackageJson: (path: string) => invokeWithErrorHandling<string>('init_package_json', { path }),
 
   getNpmPackages: (path: string) =>
     invokeWithErrorHandling<NpmPackage[]>('get_npm_packages', { path }),
@@ -155,14 +174,37 @@ export const tauriCommands = {
       version,
     }),
 
-  installNpmPackage: (params: { path: string; package: string; version?: string; dev: boolean }) =>
-    invokeWithErrorHandling<string>('install_npm_package', params),
+  installNpmPackage: (params: {
+    path: string
+    package: string
+    version?: string
+    dev: boolean
+    installId?: string
+  }) =>
+    invokeWithErrorHandling<string>('install_npm_package', {
+      path: params.path,
+      package: params.package,
+      version: params.version,
+      dev: params.dev,
+      installId: params.installId,
+    }),
 
-  updateNpmPackage: (path: string, packageName: string) =>
-    invokeWithErrorHandling<string>('update_npm_package', { path, package: packageName }),
+  updateNpmPackage: (path: string, packageName: string, installId?: string) =>
+    invokeWithErrorHandling<string>('update_npm_package', {
+      path,
+      package: packageName,
+      installId,
+    }),
 
-  removeNpmPackage: (path: string, packageName: string) =>
-    invokeWithErrorHandling<string>('remove_npm_package', { path, package: packageName }),
+  removeNpmPackage: (path: string, packageName: string, installId?: string) =>
+    invokeWithErrorHandling<string>('remove_npm_package', {
+      path,
+      package: packageName,
+      installId,
+    }),
+
+  cancelNpmInstall: (installId: string) =>
+    invokeWithErrorHandling<boolean>('cancel_npm_install', { installId }),
 }
 
 /**
