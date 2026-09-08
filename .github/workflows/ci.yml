@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    name: quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: install frontend dependencies
+        run: npm ci
+
+      - name: check formatting
+        run: npm run format:check
+
+      - name: lint
+        run: npm run lint
+
+      - name: type-check
+        run: npm run type-check
+
+      - name: build
+        run: npm run build
+
+      - name: unit tests
+        run: npm run test:run
+
+  e2e:
+    name: browser e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: install frontend dependencies
+        run: npm ci
+
+      - name: install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: run browser workflows
+        run: npm run test:e2e

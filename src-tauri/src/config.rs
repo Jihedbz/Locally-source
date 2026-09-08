@@ -1,9 +1,9 @@
+use crate::types::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri::Manager;
-use crate::types::{AppError, AppResult};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
@@ -23,9 +23,10 @@ impl Default for AppConfig {
 }
 
 pub fn get_config_path(handle: &AppHandle) -> AppResult<PathBuf> {
-    let mut path = handle.path().app_config_dir().map_err(|e| {
-        AppError::CommandFailed(format!("Failed to get app config dir: {}", e))
-    })?;
+    let mut path = handle
+        .path()
+        .app_config_dir()
+        .map_err(|e| AppError::CommandFailed(format!("Failed to get app config dir: {}", e)))?;
     fs::create_dir_all(&path).map_err(|e| AppError::Io(e))?;
     path.push("config.json");
     Ok(path)
@@ -44,7 +45,8 @@ pub fn load_config(handle: &AppHandle) -> AppResult<AppConfig> {
 
 pub fn save_config(handle: &AppHandle, config: &AppConfig) -> AppResult<()> {
     let path = get_config_path(handle)?;
-    let content = serde_json::to_string_pretty(config).map_err(|e| AppError::SerializationError(e))?;
+    let content =
+        serde_json::to_string_pretty(config).map_err(|e| AppError::SerializationError(e))?;
     fs::write(path, content).map_err(|e| AppError::Io(e))?;
     Ok(())
 }

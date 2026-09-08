@@ -1,8 +1,8 @@
-use std::path::Path;
+use crate::types::{AppError, AppResult};
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 use std::time::UNIX_EPOCH;
-use crate::types::{AppError, AppResult};
 
 /// Format bytes to human-readable size
 pub fn format_size(size: u64) -> String {
@@ -18,22 +18,31 @@ pub fn format_size(size: u64) -> String {
 }
 
 pub fn get_dir_size(path: &Path) -> AppResult<u64> {
+    if !path.exists() {
+        return Err(AppError::PathNotFound(path.display().to_string()));
+    }
+
     let mut size = 0u64;
 
     if path.is_dir() {
-        let mut entries = fs::read_dir(path)
-            .map_err(|e| AppError::Io(e))?;
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                let Ok(metadata) = fs::symlink_metadata(&entry_path) else {
+                    continue;
+                };
 
-        while let Some(entry) = entries.next() {
-            let entry = entry.map_err(|e| AppError::Io(e))?;
-            let entry_path = entry.path();
+                if metadata.file_type().is_symlink() {
+                    continue;
+                }
 
-            if entry_path.is_dir() {
-                size += get_dir_size(&entry_path)?;
-            } else if entry_path.is_file() {
-                let metadata = fs::metadata(&entry_path)
-                    .map_err(|e| AppError::Io(e))?;
-                size += metadata.len();
+                if metadata.is_dir() {
+                    if let Ok(child_size) = get_dir_size(&entry_path) {
+                        size += child_size;
+                    }
+                } else if metadata.is_file() {
+                    size += metadata.len();
+                }
             }
         }
     }
@@ -75,21 +84,26 @@ pub async fn get_last_modified(dir_path: &str) -> AppResult<Option<u64>> {
 /// Execute system command with proper error handling
 pub fn execute_command(cmd: &str, args: &[&str], current_dir: Option<&Path>) -> AppResult<String> {
     let mut command = Command::new(cmd);
-    
+
     if let Some(dir) = current_dir {
         command.current_dir(dir);
     }
-    
+
     command.args(args);
-    
-    let output = command.output()
-        .map_err(|e| AppError::CommandFailed(format!("Failed to execute command '{}': {}", cmd, e)))?;
+
+    let output = command.output().map_err(|e| {
+        AppError::CommandFailed(format!("Failed to execute command '{}': {}", cmd, e))
+    })?;
 
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(AppError::CommandFailed(format!("Command '{}' failed: {}", cmd, stderr.trim())))
+        Err(AppError::CommandFailed(format!(
+            "Command '{}' failed: {}",
+            cmd,
+            stderr.trim()
+        )))
     }
 }
 

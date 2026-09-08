@@ -1,24 +1,26 @@
 use crate::types::{AppError, AppResult};
 use crate::utils::{execute_command, get_dir_size};
-use tauri::{command, AppHandle, Manager};
+use once_cell::sync::Lazy;
+use serde_json::Value;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::fs;
-use once_cell::sync::Lazy;
+use tauri::{command, AppHandle, Manager};
 use tokio::task;
 
 static PROJECTS_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
 
 /// Initialize the projects path once
 pub fn init_project_path(handle: &AppHandle) -> AppResult<()> {
-    let mut path_guard = PROJECTS_PATH.lock().map_err(|_| AppError::PermissionDenied("Failed to acquire lock".to_string()))?;
+    let mut path_guard = PROJECTS_PATH
+        .lock()
+        .map_err(|_| AppError::PermissionDenied("Failed to acquire lock".to_string()))?;
     if path_guard.is_none() {
         if let Ok(mut path) = handle.path().app_data_dir() {
             path.push("projects");
 
             if !path.exists() {
-                fs::create_dir_all(&path)
-                    .map_err(|e| AppError::Io(e))?;
+                fs::create_dir_all(&path).map_err(|e| AppError::Io(e))?;
             }
             *path_guard = Some(path);
         }
@@ -28,41 +30,46 @@ pub fn init_project_path(handle: &AppHandle) -> AppResult<()> {
 
 /// Get the projects path
 pub fn get_project_path() -> AppResult<PathBuf> {
-    PROJECTS_PATH.lock()
+    PROJECTS_PATH
+        .lock()
         .map_err(|_| AppError::PermissionDenied("Failed to acquire lock".to_string()))?
         .clone()
         .ok_or_else(|| AppError::PathNotFound("Projects path not initialized".to_string()))
 }
 
 /// Scaffolds a new Angular project using the Angular CLI.
-/// 
+///
 /// # Arguments
 /// * `name` - The name of the new project.
 /// * `handle` - The Tauri application handle.
 #[command]
 pub async fn create_angular_project(name: String, handle: AppHandle) -> AppResult<String> {
     log::info!("Creating Angular project: {}", name);
+    validate_project_name(&name)?;
     init_project_path(&handle)?;
     let path = get_project_path()?;
-    
-    let command = format!("ng new {} --skip-install", name);
-    
+
     task::spawn_blocking(move || {
-        let args = if cfg!(target_os = "windows") {
-            vec!["/C", command.as_str()]
+        let command = if cfg!(target_os = "windows") {
+            "npx.cmd"
         } else {
-            vec!["-c", command.as_str()]
+            "npx"
         };
-        execute_command(
-            if cfg!(target_os = "windows") { "cmd" } else { "sh" },
-            &args,
-            Some(&path)
-        )
-    }).await.map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+        let args = [
+            "--yes",
+            "@angular/cli",
+            "new",
+            name.as_str(),
+            "--skip-install",
+        ];
+        execute_command(command, &args, Some(&path))
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
 }
 
 /// Scaffolds a new Next.js project using create-next-app.
-/// 
+///
 /// # Arguments
 /// * `name` - The name of the project.
 /// * `typescript` - "yes" or "no".
@@ -82,6 +89,7 @@ pub async fn create_next_project(
     turbopack: String,
 ) -> AppResult<String> {
     log::info!("Creating Next.js project: {}", name);
+    validate_project_name(&name)?;
     let project_path = get_project_path()?;
     let project_dir = project_path.join(&name);
 
@@ -92,11 +100,8 @@ pub async fn create_next_project(
         )));
     }
 
-    fs::create_dir_all(&project_dir)
-        .map_err(|e| AppError::Io(e))?;
-
     let mut args: Vec<String> = vec![];
-    
+
     // Handle all yes/no options explicitly
     if typescript == "yes" {
         args.push("--typescript".into());
@@ -145,27 +150,25 @@ pub async fn create_next_project(
         "npx"
     };
 
-    execute_command(
-        command_str,
-        &["create-next-app@latest", &name, &args.join(" ")],
-        Some(&project_path)
-    )
-    .map(|_| format!("Project '{}' created successfully.", name))
+    let project_name = name.clone();
+    let mut command_args = vec!["create-next-app@latest".to_string(), name];
+    command_args.extend(args);
+    let command_arg_refs: Vec<&str> = command_args.iter().map(String::as_str).collect();
+
+    execute_command(command_str, &command_arg_refs, Some(&project_path))
+        .map(|_| format!("Project '{}' created successfully.", project_name))
 }
 
 /// Permanently deletes a project directory from the filesystem.
-/// 
+///
 /// # Arguments
 /// * `path` - Absolute path to the project directory.
 #[command]
 pub async fn delete_project(path: String) -> AppResult<String> {
     log::info!("Deleting project at: {}", path);
-    if !Path::new(&path).exists() {
-        return Err(AppError::PathNotFound(format!("Path does not exist: {}", path)));
-    }
+    let managed_path = get_managed_project_path(&path)?;
 
-    fs::remove_dir_all(&path)
-        .map_err(|e| AppError::Io(e))?;
+    fs::remove_dir_all(&managed_path).map_err(|e| AppError::Io(e))?;
 
     Ok(format!("Project deleted successfully at {}", path))
 }
@@ -174,4 +177,364 @@ pub async fn delete_project(path: String) -> AppResult<String> {
 pub async fn get_dir_size_command(path: String) -> AppResult<u64> {
     let path = Path::new(&path);
     get_dir_size(&path)
+}
+
+fn npm_command() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "npm.cmd"
+    } else {
+        "npm"
+    }
+}
+
+fn execute_npm(path: &Path, args: Vec<String>) -> AppResult<String> {
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    execute_command(npm_command(), &arg_refs, Some(path))
+}
+
+#[command]
+pub async fn get_npm_packages(path: String) -> AppResult<Vec<crate::types::NpmPackage>> {
+    let project_path = get_managed_project_path(&path)?;
+    task::spawn_blocking(move || {
+        let package_json = project_path.join("package.json");
+        let content = fs::read_to_string(package_json).map_err(AppError::Io)?;
+        let manifest: Value = serde_json::from_str(&content)?;
+        let mut packages = Vec::new();
+
+        for (dependency_type, field) in [
+            ("production", "dependencies"),
+            ("development", "devDependencies"),
+        ] {
+            if let Some(dependencies) = manifest.get(field).and_then(Value::as_object) {
+                for (name, version) in dependencies {
+                    packages.push(crate::types::NpmPackage {
+                        name: name.clone(),
+                        version: version.as_str().unwrap_or("unknown").to_string(),
+                        dependency_type: dependency_type.to_string(),
+                    });
+                }
+            }
+        }
+
+        packages.sort_by(|left, right| left.name.cmp(&right.name));
+        Ok(packages)
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[command]
+pub async fn search_npm_packages(query: String) -> AppResult<Vec<crate::types::NpmSearchResult>> {
+    let query = query.trim().to_string();
+    if query.is_empty() || query.len() > 100 {
+        return Err(AppError::CommandFailed(
+            "Search query is invalid".to_string(),
+        ));
+    }
+
+    task::spawn_blocking(move || {
+        let output = execute_npm(
+            Path::new("."),
+            vec![
+                "search".to_string(),
+                query,
+                "--json".to_string(),
+                "--searchlimit=20".to_string(),
+            ],
+        )?;
+        let results: Vec<Value> = serde_json::from_str(&output)?;
+        Ok(results
+            .into_iter()
+            .filter_map(|result| {
+                Some(crate::types::NpmSearchResult {
+                    name: result.get("name")?.as_str()?.to_string(),
+                    version: result
+                        .get("version")
+                        .and_then(Value::as_str)
+                        .unwrap_or("latest")
+                        .to_string(),
+                    description: result
+                        .get("description")
+                        .and_then(Value::as_str)
+                        .map(String::from),
+                    package_type: result
+                        .get("packageType")
+                        .and_then(Value::as_str)
+                        .map(String::from),
+                })
+            })
+            .collect())
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[command]
+pub async fn get_npm_package_metadata(
+    package: String,
+    version: String,
+) -> AppResult<crate::types::NpmPackageMetadata> {
+    if package.trim().is_empty() || version.trim().is_empty() || version.starts_with('-') {
+        return Err(AppError::CommandFailed(
+            "Package metadata request is invalid".to_string(),
+        ));
+    }
+
+    task::spawn_blocking(move || {
+        let output = execute_npm(
+            Path::new("."),
+            vec![
+                "view".to_string(),
+                format!("{}@{}", package, version),
+                "name".to_string(),
+                "version".to_string(),
+                "description".to_string(),
+                "license".to_string(),
+                "homepage".to_string(),
+                "repository".to_string(),
+                "--json".to_string(),
+            ],
+        )?;
+        let metadata: Value = serde_json::from_str(&output)?;
+        Ok(crate::types::NpmPackageMetadata {
+            name: metadata
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(&package)
+                .to_string(),
+            version: metadata
+                .get("version")
+                .and_then(Value::as_str)
+                .unwrap_or(&version)
+                .to_string(),
+            description: metadata
+                .get("description")
+                .and_then(Value::as_str)
+                .map(String::from),
+            license: metadata
+                .get("license")
+                .and_then(Value::as_str)
+                .map(String::from),
+            homepage: metadata
+                .get("homepage")
+                .and_then(Value::as_str)
+                .map(String::from),
+            repository: metadata
+                .get("repository")
+                .and_then(Value::as_str)
+                .map(String::from),
+        })
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[command]
+pub async fn install_npm_package(
+    path: String,
+    package: String,
+    version: Option<String>,
+    dev: bool,
+) -> AppResult<String> {
+    let project_path = get_managed_project_path(&path)?;
+    let package_spec = format!(
+        "{}@{}",
+        package,
+        version.unwrap_or_else(|| "latest".to_string())
+    );
+    let mut args = vec!["install".to_string()];
+    if dev {
+        args.push("--save-dev".to_string());
+    }
+    args.push(package_spec);
+    task::spawn_blocking(move || execute_npm(&project_path, args))
+        .await
+        .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[command]
+pub async fn update_npm_package(path: String, package: String) -> AppResult<String> {
+    install_npm_package(path, package, Some("latest".to_string()), false).await
+}
+
+#[command]
+pub async fn remove_npm_package(path: String, package: String) -> AppResult<String> {
+    let project_path = get_managed_project_path(&path)?;
+    task::spawn_blocking(move || execute_npm(&project_path, vec!["uninstall".to_string(), package]))
+        .await
+        .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_project_name;
+
+    #[test]
+    fn accepts_safe_project_names() {
+        assert!(validate_project_name("my-app_2.0").is_ok());
+    }
+
+    #[test]
+    fn rejects_names_that_can_escape_the_project_directory() {
+        for name in [
+            "",
+            " ../outside",
+            "../outside",
+            "--bad-option",
+            "bad/name",
+            "bad name",
+            "CON",
+            "project.",
+        ] {
+            assert!(validate_project_name(name).is_err(), "accepted: {name}");
+        }
+    }
+}
+
+pub fn validate_project_name(name: &str) -> AppResult<()> {
+    let trimmed = name.trim();
+    if trimmed.is_empty()
+        || trimmed != name
+        || !trimmed
+            .chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_alphanumeric())
+    {
+        return Err(AppError::CommandFailed(
+            "Project name must not be empty or contain surrounding whitespace".to_string(),
+        ));
+    }
+
+    let stem = trimmed
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    let reserved_name = matches!(
+        stem.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    );
+
+    if trimmed == "."
+        || trimmed == ".."
+        || trimmed.ends_with('.')
+        || trimmed.ends_with(' ')
+        || reserved_name
+        || trimmed.len() > 100
+    {
+        return Err(AppError::CommandFailed("Invalid project name".to_string()));
+    }
+
+    if !trimmed
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
+    {
+        return Err(AppError::CommandFailed(
+            "Project names may contain only letters, numbers, hyphens, underscores, and periods"
+                .to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+pub fn get_managed_project_path(path: &str) -> AppResult<PathBuf> {
+    let projects_path = get_project_path()?.canonicalize().map_err(AppError::Io)?;
+    let candidate = Path::new(path);
+    if !candidate.exists() {
+        return Err(AppError::PathNotFound(format!(
+            "Path does not exist: {}",
+            path
+        )));
+    }
+
+    let candidate = candidate.canonicalize().map_err(AppError::Io)?;
+    let relative = candidate.strip_prefix(&projects_path).map_err(|_| {
+        AppError::PermissionDenied(
+            "The requested path is outside the managed projects directory".to_string(),
+        )
+    })?;
+
+    if !candidate.is_dir() || relative.components().count() != 1 {
+        return Err(AppError::PermissionDenied(
+            "Only managed project directories can be modified".to_string(),
+        ));
+    }
+
+    Ok(candidate)
+}
+
+#[command]
+pub async fn create_react_project(name: String, handle: AppHandle) -> AppResult<String> {
+    log::info!("Creating React project: {}", name);
+    validate_project_name(&name)?;
+    init_project_path(&handle)?;
+    let path = get_project_path()?;
+    let command = if cfg!(target_os = "windows") {
+        "npx.cmd"
+    } else {
+        "npx"
+    };
+
+    task::spawn_blocking(move || {
+        let args = [
+            "--yes".to_string(),
+            "create-vite@latest".to_string(),
+            name,
+            "--template".to_string(),
+            "react-ts".to_string(),
+        ];
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        execute_command(command, &arg_refs, Some(&path))
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[command]
+pub async fn create_vue_project(name: String, handle: AppHandle) -> AppResult<String> {
+    log::info!("Creating Vue project: {}", name);
+    validate_project_name(&name)?;
+    init_project_path(&handle)?;
+    let path = get_project_path()?;
+    let command = if cfg!(target_os = "windows") {
+        "npx.cmd"
+    } else {
+        "npx"
+    };
+
+    task::spawn_blocking(move || {
+        let args = [
+            "--yes".to_string(),
+            "create-vue@latest".to_string(),
+            name,
+            "--default".to_string(),
+            "--typescript".to_string(),
+        ];
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        execute_command(command, &arg_refs, Some(&path))
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
 }

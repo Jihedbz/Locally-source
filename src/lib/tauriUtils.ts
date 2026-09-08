@@ -5,6 +5,28 @@ export interface TauriError extends Error {
   command?: string
 }
 
+export interface NpmPackage {
+  name: string
+  version: string
+  dependencyType: 'production' | 'development'
+}
+
+export interface NpmSearchResult {
+  name: string
+  version: string
+  description?: string
+  packageType?: string
+}
+
+export interface NpmPackageMetadata {
+  name: string
+  version: string
+  description?: string
+  license?: string
+  homepage?: string
+  repository?: string
+}
+
 export class TauriCommandError extends Error implements TauriError {
   public code?: string
   public command?: string
@@ -87,6 +109,12 @@ export const tauriCommands = {
   createAngularProject: (name: string) =>
     invokeWithErrorHandling<string>('create_angular_project', { name }),
 
+  createReactProject: (name: string) =>
+    invokeWithErrorHandling<string>('create_react_project', { name }),
+
+  createVueProject: (name: string) =>
+    invokeWithErrorHandling<string>('create_vue_project', { name }),
+
   createNextProject: (params: {
     name: string
     typescript: string
@@ -114,6 +142,27 @@ export const tauriCommands = {
     invokeWithErrorHandling<number | null>('get_last_modified', { dirPath }),
 
   getDirSize: (path: string) => invokeWithErrorHandling<number>('get_dir_size', { path }),
+
+  getNpmPackages: (path: string) =>
+    invokeWithErrorHandling<NpmPackage[]>('get_npm_packages', { path }),
+
+  searchNpmPackages: (query: string) =>
+    invokeWithErrorHandling<NpmSearchResult[]>('search_npm_packages', { query }),
+
+  getNpmPackageMetadata: (packageName: string, version: string) =>
+    invokeWithErrorHandling<NpmPackageMetadata>('get_npm_package_metadata', {
+      package: packageName,
+      version,
+    }),
+
+  installNpmPackage: (params: { path: string; package: string; version?: string; dev: boolean }) =>
+    invokeWithErrorHandling<string>('install_npm_package', params),
+
+  updateNpmPackage: (path: string, packageName: string) =>
+    invokeWithErrorHandling<string>('update_npm_package', { path, package: packageName }),
+
+  removeNpmPackage: (path: string, packageName: string) =>
+    invokeWithErrorHandling<string>('remove_npm_package', { path, package: packageName }),
 }
 
 /**

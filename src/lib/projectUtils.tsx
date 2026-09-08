@@ -3,14 +3,17 @@ import { Code } from 'lucide-react'
 /**
  * Returns the appropriate icon component for a given project type.
  */
-export const getProjectIcon = (type: string) => {
+export const getProjectIcon = (type: string, sizeClass = 'text-2xl') => {
   switch (type.toLowerCase()) {
     case 'angular':
-      return <i className="devicon-angularjs-plain colored text-2xl" />
+      return <i aria-hidden="true" className={`devicon-angularjs-plain colored ${sizeClass}`} />
     case 'react':
-      return <i className="devicon-react-original colored text-2xl" />
+      return <i aria-hidden="true" className={`devicon-react-original colored ${sizeClass}`} />
     case 'next':
-      return <i className="devicon-nextjs-plain text-2xl" />
+    case 'nextjs':
+      return <i aria-hidden="true" className={`devicon-nextjs-plain ${sizeClass}`} />
+    case 'vue':
+      return <i aria-hidden="true" className={`devicon-vuejs-plain colored ${sizeClass}`} />
     default:
       return <Code className="text-2xl text-muted-foreground" />
   }

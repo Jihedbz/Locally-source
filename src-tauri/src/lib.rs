@@ -1,8 +1,8 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-pub mod types;
-pub mod utils;
 pub mod commands;
 pub mod config;
+pub mod types;
+pub mod utils;
 
 pub use types::*;
 pub use utils::*;
@@ -40,9 +40,17 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::projects::create_angular_project,
+            commands::projects::create_react_project,
+            commands::projects::create_vue_project,
             commands::projects::create_next_project,
             commands::projects::delete_project,
             commands::projects::get_dir_size_command,
+            commands::projects::get_npm_packages,
+            commands::projects::search_npm_packages,
+            commands::projects::get_npm_package_metadata,
+            commands::projects::install_npm_package,
+            commands::projects::update_npm_package,
+            commands::projects::remove_npm_package,
             commands::system::get_operating_system_command,
             commands::system::open_in_explorer,
             commands::system::open_in_vscode,

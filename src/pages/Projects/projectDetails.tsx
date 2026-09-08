@@ -2,16 +2,19 @@ import * as React from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { appDataDir, join } from '@tauri-apps/api/path'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
-import { Clipboard, Layers, CalendarDays, Clock, Database } from 'lucide-react'
+import { CalendarDays, Clipboard, Clock, Database, Layers } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useProjectStore } from '@/store/projectStore'
+import { getProjectIcon } from '@/lib/projectUtils'
 
 const ProjectDetails: React.FC = () => {
   const { selectedProject } = useProjectStore()
   const [lastModified, setLastModified] = React.useState<Date | null>(null)
   const [folderSize, setFolderSize] = React.useState<string>('Calculating...')
   const [shortenedPath, setShortenedPath] = React.useState<string>('')
+  const [isLoadingMetadata, setIsLoadingMetadata] = React.useState(false)
+  const [metadataError, setMetadataError] = React.useState<string | null>(null)
 
   const getLastModifiedDate = React.useCallback(async (dirPath: string) => {
     try {
@@ -19,6 +22,7 @@ const ProjectDetails: React.FC = () => {
       return timestamp ? new Date(timestamp * 1000) : null
     } catch (error) {
       console.error('Error fetching last modified date:', error)
+      setMetadataError('Metadata unavailable')
       return null
     }
   }, [])
@@ -38,14 +42,19 @@ const ProjectDetails: React.FC = () => {
       return size ? `${(size / (1024 * 1024)).toFixed(2)} MB` : '0 MB'
     } catch (error) {
       console.error('Error calculating folder size:', error)
-      return 'Error calculating size'
+      setMetadataError('Metadata unavailable')
+      return 'Unavailable'
     }
   }, [])
 
   React.useEffect(() => {
     if (selectedProject) {
+      setIsLoadingMetadata(true)
+      setMetadataError(null)
       getLastModifiedDate(selectedProject.path).then(setLastModified)
-      getFolderSize(selectedProject.path).then(setFolderSize)
+      getFolderSize(selectedProject.path)
+        .then(setFolderSize)
+        .finally(() => setIsLoadingMetadata(false))
 
       const shortenPath = async (fullPath: string) => {
         try {
@@ -69,6 +78,7 @@ const ProjectDetails: React.FC = () => {
       shortenPath(selectedProject.path)
     } else {
       setShortenedPath('')
+      setMetadataError(null)
     }
   }, [selectedProject, getLastModifiedDate, getFolderSize])
 
@@ -84,69 +94,85 @@ const ProjectDetails: React.FC = () => {
     : null
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-border/70 bg-muted/50 p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">
-              Project summary
-            </p>
-            <h2 className="mt-2 text-xl font-semibold text-foreground">{selectedProject.name}</h2>
-            <Badge className="mt-3 rounded-full px-3 py-1 text-xs uppercase tracking-[0.17em]">
+    <div className="space-y-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/60">
+          {getProjectIcon(selectedProject.type)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-lg font-semibold text-foreground">{selectedProject.name}</h2>
+          <div className="mt-1 flex items-center gap-2">
+            <Badge
+              variant="secondary"
+              className="rounded-md px-2 py-0.5 text-[10px] uppercase tracking-[0.14em]"
+            >
               {selectedProject.type}
             </Badge>
+            {selectedProject.pinned && (
+              <span className="text-xs text-muted-foreground">Pinned</span>
+            )}
           </div>
+        </div>
+      </div>
+
+      <div className="border-y border-border/70 py-4">
+        <div className="flex items-center justify-between gap-3 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <span className="flex items-center gap-2">
+            <Layers className="h-3.5 w-3.5" /> Location
+          </span>
           <Button
-            variant="secondary"
-            size="sm"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title="Copy project path"
+            aria-label="Copy project path"
             onClick={() => copyPathClipboard(selectedProject.path)}
           >
-            <Clipboard className="mr-2 h-4 w-4" />
-            Copy path
+            <Clipboard className="h-3.5 w-3.5" />
           </Button>
         </div>
-
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-3xl border border-border/60 bg-background/80 p-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Layers className="h-4 w-4" />
-              <span>Project location</span>
-            </div>
-            <p className="mt-3 text-sm leading-6 break-words text-foreground">{shortenedPath}</p>
-          </div>
-          <div className="rounded-3xl border border-border/60 bg-background/80 p-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Database className="h-4 w-4" />
-              <span>Size</span>
-            </div>
-            <p className="mt-3 text-lg font-semibold text-foreground">{folderSize}</p>
-          </div>
-          <div className="rounded-3xl border border-border/60 bg-background/80 p-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <CalendarDays className="h-4 w-4" />
-              <span>Created</span>
-            </div>
-            <p className="mt-3 text-lg font-semibold text-foreground">
-              {new Date(selectedProject.createdAt).toLocaleDateString()}
-            </p>
-          </div>
-          <div className="rounded-3xl border border-border/60 bg-background/80 p-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>Last modified</span>
-            </div>
-            <p className="mt-3 text-lg font-semibold text-foreground">
-              {lastModified ? lastModified.toLocaleString() : 'N/A'}
-            </p>
-          </div>
-        </div>
-
-        {projectAge !== null && (
-          <div className="rounded-3xl border border-border/60 bg-background/80 p-4 text-sm text-muted-foreground">
-            Project age: <span className="text-foreground font-semibold">{projectAge} days</span>
-          </div>
-        )}
+        <p className="mt-2 break-words text-sm leading-6 text-foreground">
+          {shortenedPath || 'Loading path...'}
+        </p>
       </div>
+
+      <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            <Database className="h-3.5 w-3.5" /> Size
+          </div>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {isLoadingMetadata ? 'Calculating...' : folderSize}
+          </p>
+        </div>
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            <CalendarDays className="h-3.5 w-3.5" /> Created
+          </div>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {new Date(selectedProject.createdAt).toLocaleDateString()}
+          </p>
+        </div>
+        <div className="col-span-2">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" /> Last modified
+          </div>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {metadataError ||
+              (lastModified
+                ? lastModified.toLocaleString()
+                : isLoadingMetadata
+                  ? 'Loading...'
+                  : 'Unavailable')}
+          </p>
+        </div>
+      </div>
+
+      {projectAge !== null && (
+        <p className="border-t border-border/70 pt-4 text-sm text-muted-foreground">
+          Project age <span className="font-semibold text-foreground">{projectAge} days</span>
+        </p>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
+pub mod cleanup;
 pub mod projects;
 pub mod system;
-pub mod cleanup;
 
+pub use cleanup::*;
 pub use projects::*;
 pub use system::*;
-pub use cleanup::*;

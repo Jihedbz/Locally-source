@@ -2,14 +2,16 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useProjects } from '../useProjects'
 import { useProjectStore } from '@/store/projectStore'
+import { Project } from '@/types/project'
 
 describe('useProjects hook', () => {
   beforeEach(() => {
-    useProjectStore.getState().setProjects([
+    const projects: Project[] = [
       { name: 'React App', type: 'react', path: '/path/react', createdAt: '', pinned: false },
       { name: 'Angular App', type: 'angular', path: '/path/angular', createdAt: '', pinned: false },
-      { name: 'Another React', type: 'react', path: '/path/react2', createdAt: '', pinned: false }
-    ] as any)
+      { name: 'Another React', type: 'react', path: '/path/react2', createdAt: '', pinned: false },
+    ]
+    useProjectStore.getState().setProjects(projects)
     useProjectStore.getState().setSearchQuery('')
   })
 

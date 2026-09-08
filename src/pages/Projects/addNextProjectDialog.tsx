@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { writeTextFile, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { appDataDir, join } from '@tauri-apps/api/path'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -8,14 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useAlertStore } from '@/store/alertStore'
-
-interface Project {
-  name: string
-  path: string
-  type: string
-  createdAt: string
-  pinned: boolean
-}
+import { useProjectStore } from '@/store/projectStore'
+import { Project } from '@/types/project'
+import { Loader2 } from 'lucide-react'
 
 interface FormState {
   name: string
@@ -37,7 +31,9 @@ export function AddNextProjectDialog() {
     turbopack: false,
     appRouter: true,
   })
+  const [isCreating, setIsCreating] = useState(false)
   const { show } = useAlertStore()
+  const addProject = useProjectStore((state) => state.addProject)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleChange = (name: keyof FormState, value: boolean | string) => {
@@ -54,6 +50,7 @@ export function AddNextProjectDialog() {
       return
     }
 
+    setIsCreating(true)
     try {
       const appDataDirPath = await appDataDir()
       const baseProjectPath = await join(appDataDirPath, 'projects')
@@ -73,12 +70,12 @@ export function AddNextProjectDialog() {
       const newProject: Project = {
         name: projectName,
         path: fullProjectPath,
-        type: 'Next',
+        type: 'next',
         createdAt: now,
         pinned: false,
       }
 
-      await saveProject(newProject)
+      await addProject(newProject)
       show('success', 'Project created successfully!')
       setForm({
         name: '',
@@ -95,29 +92,8 @@ export function AddNextProjectDialog() {
     } catch (error) {
       console.error('Failed to save project:', error)
       show('error', error instanceof Error ? error.message : String(error))
-    }
-  }
-
-  const saveProject = async (project: Project) => {
-    try {
-      const filePath = 'projects/projects.json'
-      let projects: Project[] = []
-      try {
-        const data = await readTextFile(filePath, { baseDir: BaseDirectory.AppData })
-        projects = JSON.parse(data)
-      } catch (readError) {
-        if (!(readError instanceof Error && readError.message.includes('File not found'))) {
-          throw readError
-        }
-      }
-      projects.push(project)
-      await writeTextFile(filePath, JSON.stringify(projects, null, 2), {
-        baseDir: BaseDirectory.AppData,
-        create: true,
-      })
-    } catch (writeError) {
-      console.error('Error writing to projects.json:', writeError)
-      show('error', writeError instanceof Error ? writeError.message : String(writeError))
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -160,6 +136,7 @@ export function AddNextProjectDialog() {
                 defaultValue=""
                 placeholder="e.g. portfolio-site"
                 className="mt-2"
+                disabled={isCreating}
               />
             </div>
             <div className="rounded-3xl border border-border/60 bg-muted/50 p-4">
@@ -182,6 +159,7 @@ export function AddNextProjectDialog() {
                   id={option.field}
                   checked={!!form[option.field]}
                   onCheckedChange={(checked) => handleChange(option.field, !!checked)}
+                  disabled={isCreating}
                 />
                 <div>
                   <label htmlFor={option.field} className="font-semibold text-foreground">
@@ -198,8 +176,9 @@ export function AddNextProjectDialog() {
               <p className="font-medium text-foreground">Ready to generate?</p>
               <p>Locally will scaffold the project and persist the metadata for fast access.</p>
             </div>
-            <Button type="submit" size="lg">
-              ✨ Create project
+            <Button type="submit" size="lg" disabled={isCreating}>
+              {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : '✨'}
+              {isCreating ? 'Creating project...' : 'Create project'}
             </Button>
           </div>
         </form>

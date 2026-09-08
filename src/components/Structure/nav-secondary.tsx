@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { type LucideIcon } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 import {
   SidebarGroup,
@@ -20,17 +20,25 @@ export function NavSecondary({
     icon: LucideIcon
   }[]
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
+  const location = useLocation()
+
   return (
     <SidebarGroup {...props}>
       <SidebarGroupContent>
         <SidebarMenu className="space-y-1">
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild size="sm" className="hover-lift group">
+              <SidebarMenuButton
+                asChild
+                size="sm"
+                tooltip={item.title}
+                isActive={location.pathname === item.url}
+                className="hover-lift group"
+              >
                 {item.url.startsWith('/') ? (
                   <Link
                     to={item.url}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-accent/50"
+                    className="flex items-center gap-3 rounded-lg transition-all duration-200 hover:bg-accent/50"
                   >
                     <item.icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     <span className="text-sm">{item.title}</span>
@@ -38,7 +46,7 @@ export function NavSecondary({
                 ) : (
                   <a
                     href={item.url}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-accent/50"
+                    className="flex items-center gap-3 rounded-lg transition-all duration-200 hover:bg-accent/50"
                   >
                     <item.icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     <span className="text-sm">{item.title}</span>

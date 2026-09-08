@@ -13,18 +13,7 @@ import {
 import { NavSecondary } from './nav-secondary'
 import { ModeToggle } from '@/components/ui/modeToggle.tsx'
 
-// This is sample data.
 const data = {
-  user: {
-    name: 'Jihed',
-    email: 'Jihed.bouazizi@esprit.tn',
-    avatar: '/avatars/shadcn.jpg',
-  },
-  teams: {
-    name: 'Locally',
-    logo: 'src-tauri/icons/128x128@2x.png',
-    plan: 'Early Alpha',
-  },
   navMain: [
     {
       title: 'Home',
@@ -60,7 +49,7 @@ const data = {
     },
     {
       title: 'Feedback',
-      url: '#',
+      url: '/feedback',
       icon: Send,
     },
   ],
@@ -71,17 +60,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar
       collapsible="icon"
       {...props}
-      className="border-r-0 bg-gradient-to-b from-background to-muted/20"
+      className="border-r-0 bg-gradient-to-b from-sidebar via-sidebar to-muted/20"
     >
-      <SidebarHeader className="border-b border-border/50 p-4">
+      <SidebarHeader className="border-b border-border/60 p-3 group-data-[collapsible=icon]:p-2">
         <TeamSwitcher />
       </SidebarHeader>
-      <SidebarContent className="px-2">
+      <SidebarContent className="px-2 py-3 group-data-[collapsible=icon]:px-1">
         <NavMain items={data.navMain} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
-      <SidebarFooter className="border-t border-border/50 p-4">
-        <div className="flex items-center justify-between w-full">
+      <SidebarFooter className="border-t border-border/60 p-3 group-data-[collapsible=icon]:p-2">
+        <div className="flex w-full items-center justify-between group-data-[collapsible=icon]:justify-center">
           <ModeToggle />
         </div>
       </SidebarFooter>

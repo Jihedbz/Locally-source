@@ -1,7 +1,7 @@
 'use client'
 
 import { type LucideIcon } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 import {
   SidebarGroup,
@@ -20,6 +20,8 @@ export function NavMain({
     icon: LucideIcon
   }[]
 }) {
+  const location = useLocation()
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -28,11 +30,20 @@ export function NavMain({
       <SidebarMenu className="space-y-1">
         {items.map((item) => (
           <SidebarMenuItem key={item.title}>
-            <SidebarMenuButton asChild size="sm" className="hover-lift group">
+            <SidebarMenuButton
+              asChild
+              size="sm"
+              tooltip={item.title}
+              isActive={
+                location.pathname === item.url ||
+                (item.url !== '/' && location.pathname.startsWith(`${item.url}/`))
+              }
+              className="hover-lift group"
+            >
               {item.url.startsWith('/') ? (
                 <Link
                   to={item.url}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-accent/50"
+                  className="flex items-center gap-3 rounded-lg transition-all duration-200 hover:bg-accent/50"
                 >
                   <item.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
                   <span className="font-medium">{item.title}</span>
@@ -40,7 +51,7 @@ export function NavMain({
               ) : (
                 <a
                   href={item.url}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-accent/50"
+                  className="flex items-center gap-3 rounded-lg transition-all duration-200 hover:bg-accent/50"
                 >
                   <item.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
                   <span className="font-medium">{item.title}</span>

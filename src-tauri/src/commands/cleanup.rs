@@ -1,21 +1,20 @@
+use crate::commands::projects::get_managed_project_path;
+use crate::types::AppResult;
 use crate::utils::get_dir_size;
-use crate::types::{AppError, AppResult};
-use tauri::command;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
+use tauri::command;
 
 /// Recursively removes temporary build directories and files from a project.
-/// 
+///
 /// Supported items include: node_modules, dist, build, .next, target, .DS_Store, etc.
-/// 
+///
 /// # Arguments
 /// * `path` - Absolute path to the project to clean.
 #[command]
 pub fn clean_project(path: String) -> AppResult<String> {
     log::info!("Cleaning project at: {}", path);
-    if !Path::new(&path).exists() {
-        return Err(AppError::PathNotFound(format!("Path does not exist: {}", path)));
-    }
+    let managed_path = get_managed_project_path(&path)?;
 
     // Define common directories and files to clean
     let temp_dirs = vec![
@@ -66,7 +65,7 @@ pub fn clean_project(path: String) -> AppResult<String> {
     // Clean directories
     for temp_dir in temp_dirs {
         clean_recursive(
-            &Path::new(&path),
+            &managed_path,
             temp_dir,
             &mut total_cleaned,
             &mut total_size,
@@ -76,7 +75,7 @@ pub fn clean_project(path: String) -> AppResult<String> {
     }
 
     // Clean specific files (this is a simple version, could be enhanced with glob patterns)
-    if let Ok(entries) = fs::read_dir(&path) {
+    if let Ok(entries) = fs::read_dir(&managed_path) {
         for entry in entries.flatten() {
             let entry_path = entry.path();
             if entry_path.is_file() {
@@ -88,9 +87,8 @@ pub fn clean_project(path: String) -> AppResult<String> {
                                 if pattern.starts_with("*.") {
                                     let ext = pattern.split(".").nth(1).unwrap_or("");
                                     if file_name_str.ends_with(&format!(".{}", ext)) {
-                                        let file_size = fs::metadata(&entry_path)
-                                            .map(|m| m.len())
-                                            .unwrap_or(0);
+                                        let file_size =
+                                            fs::metadata(&entry_path).map(|m| m.len()).unwrap_or(0);
                                         if let Err(e) = fs::remove_file(&entry_path) {
                                             errors.push(format!(
                                                 "Failed to remove {}: {}",
@@ -105,9 +103,8 @@ pub fn clean_project(path: String) -> AppResult<String> {
                                     }
                                 }
                             } else if file_name_str == *pattern {
-                                let file_size = fs::metadata(&entry_path)
-                                    .map(|m| m.len())
-                                    .unwrap_or(0);
+                                let file_size =
+                                    fs::metadata(&entry_path).map(|m| m.len()).unwrap_or(0);
                                 if let Err(e) = fs::remove_file(&entry_path) {
                                     errors.push(format!(
                                         "Failed to remove {}: {}",

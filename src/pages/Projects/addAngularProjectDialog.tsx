@@ -1,23 +1,19 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { writeTextFile, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 import { appDataDir, join } from '@tauri-apps/api/path'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useAlertStore } from '@/store/alertStore'
-
-interface Project {
-  name: string
-  path: string
-  type: string
-  createdAt: string
-  pinned: boolean
-}
+import { useProjectStore } from '@/store/projectStore'
+import { Project } from '@/types/project'
+import { Loader2 } from 'lucide-react'
 
 export function AddAngularProjectDialog() {
+  const [isCreating, setIsCreating] = useState(false)
   const { show } = useAlertStore()
+  const addProject = useProjectStore((state) => state.addProject)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,6 +25,7 @@ export function AddAngularProjectDialog() {
       return
     }
 
+    setIsCreating(true)
     try {
       const appDataDirPath = await appDataDir()
       const baseProjectPath = await join(appDataDirPath, 'projects')
@@ -40,12 +37,12 @@ export function AddAngularProjectDialog() {
       const newProject: Project = {
         name: projectName,
         path: fullProjectPath,
-        type: 'Angular',
+        type: 'angular',
         createdAt: now,
         pinned: false,
       }
 
-      await saveProject(newProject)
+      await addProject(newProject)
       show('success', 'Angular project created successfully!')
       if (inputRef.current) {
         inputRef.current.value = ''
@@ -53,29 +50,8 @@ export function AddAngularProjectDialog() {
     } catch (error) {
       console.error('Failed to save project:', error)
       show('error', error instanceof Error ? error.message : String(error))
-    }
-  }
-
-  const saveProject = async (project: Project) => {
-    try {
-      const filePath = 'projects/projects.json'
-      let projects: Project[] = []
-      try {
-        const data = await readTextFile(filePath, { baseDir: BaseDirectory.AppData })
-        projects = JSON.parse(data)
-      } catch (readError) {
-        if (!(readError instanceof Error && readError.message.includes('File not found'))) {
-          throw readError
-        }
-      }
-      projects.push(project)
-      await writeTextFile(filePath, JSON.stringify(projects, null, 2), {
-        baseDir: BaseDirectory.AppData,
-        create: true,
-      })
-    } catch (writeError) {
-      console.error('Error writing to projects.json:', writeError)
-      show('error', writeError instanceof Error ? writeError.message : String(writeError))
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -110,6 +86,7 @@ export function AddAngularProjectDialog() {
               defaultValue=""
               placeholder="e.g. admin-dashboard"
               className="mt-2"
+              disabled={isCreating}
             />
           </div>
 
@@ -131,8 +108,9 @@ export function AddAngularProjectDialog() {
                 dashboard.
               </p>
             </div>
-            <Button type="submit" size="lg">
-              ✨ Create Angular project
+            <Button type="submit" size="lg" disabled={isCreating}>
+              {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : '✨'}
+              {isCreating ? 'Creating Angular project...' : 'Create Angular project'}
             </Button>
           </div>
         </form>

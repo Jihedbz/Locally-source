@@ -16,6 +16,8 @@
         "title": "locally",
         "width": 1200,
         "height": 700,
+        "minWidth": 1000,
+        "minHeight": 640,
         "resizable": true
         
       }
