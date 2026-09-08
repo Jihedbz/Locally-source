@@ -1,112 +1,150 @@
-# Locally - Desktop Project Manager
+# Locally
 
-Locally is a modern, cross-platform desktop application designed to streamline the lifecycle of web development projects. Built with Tauri, React, and TypeScript, it allows developers to quickly scaffold, manage, and clean their projects from a central, beautifully designed interface.
+Locally is a cross-platform desktop project manager for local web development. It combines a React interface with a Rust/Tauri backend so developers can create, inspect, open, clean, and maintain projects from one workspace.
 
-For a detailed technical breakdown, please see the [Architecture Documentation](architecture.md).
+See [architecture.md](architecture.md) for the system structure and IPC design.
 
-## What it Does (Features)
+## Features
 
-- **Project Scaffolding**: Quickly create new web projects (like Next.js and Angular) with custom configurations straight from the UI.
-- **Centralized Dashboard**: View and manage all your development projects in one place.
-- **Deep System Integration**: 
-  - Open projects instantly in VS Code.
-  - Launch native system terminals directly at the project path.
-  - Open projects in your OS's native file explorer.
-- **One-Click Cleanup**: Automatically detect and remove heavy build artifacts and dependency folders (`node_modules`, `dist`, `.next`, `target`, etc.) to free up disk space.
-- **Cross-Platform**: Provides a native-feeling experience across Windows, macOS, and Linux.
+### Project workspace
 
-## Tech Stack
+- Browse projects in grid or list view.
+- Search by project name or framework.
+- Pin projects and inspect metadata such as location, size, creation date, and last modification.
+- Open a project in the native file explorer, VS Code, or a terminal.
+- Clean common generated folders and files, including `node_modules`, `dist`, `.next`, `target`, and coverage output.
+- Delete projects with managed-path validation.
 
-- **Frontend**: React 18.3, TypeScript, Vite, TailwindCSS, shadcn/ui, Zustand
-- **Backend**: Rust, Tauri v2, Tokio
-- **Testing**: Vitest, React Testing Library, Playwright
+### Project creation
 
-## Development Setup
+Create projects from the **New project** menu:
 
-### Prerequisites
+- Next.js
+- Angular
+- React with Vite and TypeScript
+- Vue with Vite and TypeScript
 
-- Node.js 18+
-- Rust 1.70+
-- OS-specific dependencies:
-  - **Linux**: `sudo apt-get install libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
-  - **macOS/Windows**: Provided by default with Rust/C++ build tools.
+Project metadata is persisted in the Tauri app-data directory under `projects/projects.json` and is updated in the Zustand store only after a successful write. Duplicate project names are rejected.
 
-### Installation & Running
+### npm package management
+
+From a selected project, open **Manage npm packages** to:
+
+- List production and development dependencies from `package.json`.
+- Inspect package metadata such as description, license, homepage, and version.
+- Search the npm registry.
+- Install packages as production or development dependencies.
+- Install a specific version, update to latest, or remove a package.
+- Refresh the installed package list with loading, empty, and failure states.
+
+### Interface
+
+- Responsive layout for the default `1200x700` window, smaller supported sizes, and fullscreen.
+- Sticky app header and package-details panels where appropriate.
+- Collapsible sidebar with active-route highlighting and collapsed-state tooltips.
+- Local Devicon framework icons for project cards, details, and creation menus.
+- Light, dark, and system theme modes.
+
+## Technology
+
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Radix UI, Zustand
+- **Desktop backend**: Rust, Tauri 2.11, Tokio
+- **Icons**: Devicon and Lucide
+- **Testing**: Vitest, React Testing Library, Playwright, Rust tests
+- **Quality**: ESLint, Prettier, TypeScript, GitHub Actions CI
+
+## Requirements
+
+- Node.js and npm
+- Rust stable with the Tauri desktop prerequisites
+- Windows: Microsoft WebView2 and the Visual Studio C++ build tools
+- macOS: Xcode Command Line Tools
+- Linux: WebKitGTK and Tauri system dependencies. On Ubuntu/Debian:
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd locally
+sudo apt-get update
+sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+```
 
-# Install frontend dependencies
+The npm CLI must be available on the system for project scaffolding and package management. The app invokes `npx`/`npm` with direct arguments and does not require globally installed framework CLIs.
+
+## Development
+
+Install dependencies:
+
+```bash
 npm install
+```
 
-# Start the application in development mode
-# This starts the Vite dev server and the Tauri Rust backend simultaneously.
+Run the desktop application:
+
+```bash
 npm run tauri dev
 ```
 
-## How to Test it
-
-Locally includes comprehensive testing setups for both the frontend components and the end-to-end user flows.
-
-### 1. Unit & Component Testing (Frontend)
-We use Vitest and React Testing Library to test React components and hooks.
+Run only the Vite frontend:
 
 ```bash
-# Run tests once
+npm run dev
+```
+
+The Vite development server uses port `1420`, matching the Tauri configuration.
+
+## Validation Commands
+
+Frontend unit tests:
+
+```bash
 npm run test:run
-
-# Run tests in watch mode (for active development)
-npm run test
-
-# Run tests with the Vitest UI
-npm run test:ui
+npm run test       # watch mode
+npm run test:ui    # Vitest UI
 ```
 
-### 2. End-to-End (E2E) Testing
-We use Playwright to simulate real user interactions and test the full application flow.
+Browser workflows:
 
 ```bash
-# Run all E2E tests
-npx playwright test
-
-# Run Playwright tests with the UI mode
-npx playwright test --ui
+npm run test:e2e:install
+npm run test:e2e
 ```
 
-### 3. Backend (Rust) Testing
-You can test the core Rust logic directly using Cargo.
+Playwright starts Vite automatically and uses a browser-only Tauri IPC mock. Desktop behavior should also be verified with `npm run tauri dev`.
+
+Rust checks:
 
 ```bash
-# Navigate to the backend directory
-cd src-tauri
-
-# Run tests
-cargo test
+cargo check --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-### 4. Code Quality
-Ensure your code meets the quality standards before submitting changes:
+Full frontend quality gate:
 
 ```bash
-npm run lint         # Check for ESLint issues
-npm run format:check # Check Prettier formatting
-npm run type-check   # Validate TypeScript types
-cargo check          # Validate Rust types and lifetimes (in src-tauri)
+npm run format:check
+npm run lint
+npm run type-check
+npm run build
 ```
 
-## Roadmap
+These checks also run in GitHub Actions for pushes and pull requests. The CI workflow installs the pinned Playwright Chromium browser before running E2E tests.
 
-- [x] Backend modularization
-- [x] Frontend state management refactoring
-- [x] Performance optimizations
-- [ ] Settings page implementation
-- [ ] Tools page with developer utilities
-- [ ] Git integration
-- [ ] Custom project templates
-- [ ] Enhanced error handling
+## Project Layout
 
-## License
+```text
+src/                         React frontend
+src/components/              Shared UI and application structure
+src/pages/                   Home, projects, package management, settings, tools
+src/hooks/                   Frontend business logic
+src/lib/                     Tauri wrappers and utilities
+src/store/                   Zustand state and persistence actions
+src-tauri/src/commands/      Rust IPC commands
+src-tauri/src/types.rs       Serializable backend types and errors
+e2e/                         Playwright browser workflows
+.github/workflows/           Quality and release workflows
+```
 
-MIT License - Copyright (c) 2024 Locally Team
+## Current Priorities
+
+- Improve desktop runtime diagnostics when npm or a framework CLI is unavailable.
+- Expand npm package-management tests against real projects.
+- Add Git integration and custom project templates.
+- Continue improving release packaging and cross-platform verification.
