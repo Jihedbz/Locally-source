@@ -607,9 +607,243 @@ pub async fn cancel_npm_install(
     Ok(cancelled)
 }
 
+pub fn parse_npm_audit_json(content: &str) -> AppResult<crate::types::NpmAuditReport> {
+    let parsed: Value = serde_json::from_str(content)?;
+
+    let mut summary = crate::types::NpmAuditSummary::default();
+    if let Some(metadata) = parsed.get("metadata") {
+        if let Some(vulns) = metadata.get("vulnerabilities") {
+            summary.info = vulns.get("info").and_then(Value::as_u64).unwrap_or(0);
+            summary.low = vulns.get("low").and_then(Value::as_u64).unwrap_or(0);
+            summary.moderate = vulns.get("moderate").and_then(Value::as_u64).unwrap_or(0);
+            summary.high = vulns.get("high").and_then(Value::as_u64).unwrap_or(0);
+            summary.critical = vulns.get("critical").and_then(Value::as_u64).unwrap_or(0);
+            summary.total = vulns.get("total").and_then(Value::as_u64).unwrap_or(
+                summary.info + summary.low + summary.moderate + summary.high + summary.critical,
+            );
+        }
+        if let Some(deps) = metadata.get("dependencies") {
+            summary.total_dependencies = deps.get("total").and_then(Value::as_u64).unwrap_or(0);
+        }
+    }
+
+    let mut vulnerabilities = Vec::new();
+    if let Some(vulns_map) = parsed.get("vulnerabilities").and_then(Value::as_object) {
+        for (pkg_name, vuln_val) in vulns_map {
+            let severity = vuln_val
+                .get("severity")
+                .and_then(Value::as_str)
+                .unwrap_or("info")
+                .to_string();
+            let is_direct = vuln_val
+                .get("isDirect")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let range = vuln_val
+                .get("range")
+                .and_then(Value::as_str)
+                .map(String::from);
+
+            let effects = vuln_val
+                .get("effects")
+                .and_then(Value::as_array)
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(Value::as_str)
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let mut via_strings = Vec::new();
+            let mut advisories = Vec::new();
+
+            if let Some(via_arr) = vuln_val.get("via").and_then(Value::as_array) {
+                for via_item in via_arr {
+                    if let Some(s) = via_item.as_str() {
+                        via_strings.push(s.to_string());
+                    } else if let Some(adv_obj) = via_item.as_object() {
+                        let adv_name = adv_obj
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .unwrap_or(pkg_name)
+                            .to_string();
+                        let title = adv_obj
+                            .get("title")
+                            .and_then(Value::as_str)
+                            .map(String::from);
+                        let url = adv_obj
+                            .get("url")
+                            .and_then(Value::as_str)
+                            .map(String::from);
+                        let adv_severity = adv_obj
+                            .get("severity")
+                            .and_then(Value::as_str)
+                            .unwrap_or(&severity)
+                            .to_string();
+                        let adv_range = adv_obj
+                            .get("range")
+                            .and_then(Value::as_str)
+                            .map(String::from);
+
+                        let cwe = adv_obj
+                            .get("cwe")
+                            .and_then(Value::as_array)
+                            .map(|cwes| {
+                                cwes.iter()
+                                    .filter_map(Value::as_str)
+                                    .map(String::from)
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+
+                        advisories.push(crate::types::NpmVulnerabilityAdvisory {
+                            name: adv_name,
+                            title,
+                            url,
+                            severity: adv_severity,
+                            range: adv_range,
+                            cwe,
+                        });
+                    }
+                }
+            }
+
+            let fix_available = if let Some(fix_val) = vuln_val.get("fixAvailable") {
+                if let Some(is_bool) = fix_val.as_bool() {
+                    if is_bool {
+                        Some(crate::types::NpmFixAvailable {
+                            name: Some(pkg_name.clone()),
+                            version: None,
+                            is_sem_ver_major: Some(false),
+                        })
+                    } else {
+                        None
+                    }
+                } else if let Some(fix_obj) = fix_val.as_object() {
+                    Some(crate::types::NpmFixAvailable {
+                        name: fix_obj.get("name").and_then(Value::as_str).map(String::from),
+                        version: fix_obj
+                            .get("version")
+                            .and_then(Value::as_str)
+                            .map(String::from),
+                        is_sem_ver_major: fix_obj
+                            .get("isSemVerMajor")
+                            .and_then(Value::as_bool),
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            vulnerabilities.push(crate::types::NpmVulnerabilityItem {
+                name: pkg_name.clone(),
+                severity,
+                is_direct,
+                range,
+                effects,
+                via: via_strings,
+                fix_available,
+                advisories,
+            });
+        }
+    }
+
+    fn severity_weight(sev: &str) -> u8 {
+        match sev.to_ascii_lowercase().as_str() {
+            "critical" => 5,
+            "high" => 4,
+            "moderate" => 3,
+            "low" => 2,
+            "info" => 1,
+            _ => 0,
+        }
+    }
+
+    vulnerabilities.sort_by(|a, b| {
+        let weight_a = severity_weight(&a.severity);
+        let weight_b = severity_weight(&b.severity);
+        weight_b.cmp(&weight_a).then_with(|| a.name.cmp(&b.name))
+    });
+
+    Ok(crate::types::NpmAuditReport {
+        summary,
+        vulnerabilities,
+    })
+}
+
+#[command]
+pub async fn audit_npm_packages(path: String) -> AppResult<crate::types::NpmAuditReport> {
+    let project_path = get_managed_project_path(&path)?;
+    task::spawn_blocking(move || {
+        let package_json = project_path.join("package.json");
+        if !package_json.exists() {
+            return Err(AppError::FileNotFound(
+                "package.json not found in project directory".to_string(),
+            ));
+        }
+
+        let mut command = std::process::Command::new(npm_command());
+        command.current_dir(&project_path);
+        command.args(["audit", "--json"]);
+
+        let output = command.output().map_err(|e| {
+            AppError::CommandFailed(format_npm_error(&e.to_string()))
+        })?;
+
+        let stdout_str = String::from_utf8_lossy(&output.stdout);
+        let trimmed_stdout = stdout_str.trim();
+
+        if !trimmed_stdout.is_empty()
+            && (trimmed_stdout.starts_with('{') || trimmed_stdout.starts_with('['))
+        {
+            if let Ok(report) = parse_npm_audit_json(trimmed_stdout) {
+                return Ok(report);
+            }
+        }
+
+        let stderr_str = String::from_utf8_lossy(&output.stderr);
+        if !stderr_str.trim().is_empty() {
+            Err(AppError::CommandFailed(format_npm_error(&stderr_str)))
+        } else if !trimmed_stdout.is_empty() {
+            parse_npm_audit_json(trimmed_stdout)
+        } else {
+            Err(AppError::CommandFailed(
+                "npm audit returned empty output.".to_string(),
+            ))
+        }
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[command]
+pub async fn fix_npm_audit(
+    path: String,
+    force: bool,
+    install_id: Option<String>,
+    handle: AppHandle,
+    process_mgr: State<'_, ProcessManager>,
+) -> AppResult<String> {
+    let project_path = get_managed_project_path(&path)?;
+    let mut args = vec!["audit".to_string(), "fix".to_string()];
+    if force {
+        args.push("--force".to_string());
+    }
+
+    let pm = process_mgr.inner().clone();
+    task::spawn_blocking(move || {
+        execute_npm_with_progress(&handle, &pm, install_id.as_deref(), &project_path, args)
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
 #[cfg(test)]
 mod tests {
-    use super::validate_project_name;
+    use super::{parse_npm_audit_json, validate_project_name};
 
     #[test]
     fn accepts_safe_project_names() {
@@ -630,6 +864,105 @@ mod tests {
         ] {
             assert!(validate_project_name(name).is_err(), "accepted: {name}");
         }
+    }
+
+    #[test]
+    fn parses_npm_audit_json_correctly() {
+        let sample_json = r#"{
+            "auditReportVersion": 2,
+            "vulnerabilities": {
+                "semver": {
+                    "name": "semver",
+                    "severity": "high",
+                    "isDirect": false,
+                    "range": ">=7.0.0 <7.5.2",
+                    "effects": ["@babel/core"],
+                    "via": [
+                        {
+                            "source": 1094000,
+                            "name": "semver",
+                            "dependency": "semver",
+                            "title": "ReDoS in semver",
+                            "url": "https://github.com/advisories/GHSA-c2qf-rxjj-qqgw",
+                            "severity": "high",
+                            "cwe": ["CWE-1333"],
+                            "range": ">=7.0.0 <7.5.2"
+                        }
+                    ],
+                    "fixAvailable": {
+                        "name": "@babel/core",
+                        "version": "7.23.0",
+                        "isSemVerMajor": false
+                    }
+                },
+                "axios": {
+                    "name": "axios",
+                    "severity": "critical",
+                    "isDirect": true,
+                    "range": "<0.21.2",
+                    "effects": [],
+                    "via": [
+                        {
+                            "source": 1094001,
+                            "name": "axios",
+                            "dependency": "axios",
+                            "title": "SSRF in axios",
+                            "url": "https://github.com/advisories/GHSA-example",
+                            "severity": "critical",
+                            "cwe": ["CWE-918"],
+                            "range": "<0.21.2"
+                        }
+                    ],
+                    "fixAvailable": true
+                }
+            },
+            "metadata": {
+                "vulnerabilities": {
+                    "info": 0,
+                    "low": 0,
+                    "moderate": 0,
+                    "high": 1,
+                    "critical": 1,
+                    "total": 2
+                },
+                "dependencies": {
+                    "prod": 10,
+                    "dev": 20,
+                    "optional": 0,
+                    "peer": 0,
+                    "peerOptional": 0,
+                    "total": 30
+                }
+            }
+        }"#;
+
+        let report = parse_npm_audit_json(sample_json).expect("failed to parse sample audit JSON");
+        assert_eq!(report.summary.total, 2);
+        assert_eq!(report.summary.critical, 1);
+        assert_eq!(report.summary.high, 1);
+        assert_eq!(report.summary.total_dependencies, 30);
+        assert_eq!(report.vulnerabilities.len(), 2);
+
+        // Sorted by severity descending: critical (axios) first, then high (semver)
+        assert_eq!(report.vulnerabilities[0].name, "axios");
+        assert_eq!(report.vulnerabilities[0].severity, "critical");
+        assert!(report.vulnerabilities[0].is_direct);
+        assert_eq!(report.vulnerabilities[0].advisories.len(), 1);
+        assert_eq!(
+            report.vulnerabilities[0].advisories[0].title.as_deref(),
+            Some("SSRF in axios")
+        );
+
+        assert_eq!(report.vulnerabilities[1].name, "semver");
+        assert_eq!(report.vulnerabilities[1].severity, "high");
+        assert!(!report.vulnerabilities[1].is_direct);
+        assert_eq!(
+            report.vulnerabilities[1]
+                .fix_available
+                .as_ref()
+                .and_then(|f| f.version.as_deref()),
+            Some("7.23.0")
+        );
     }
 }
 

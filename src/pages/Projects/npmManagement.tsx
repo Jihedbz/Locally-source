@@ -13,11 +13,12 @@ import {
   RefreshCw,
   Search,
   StopCircle,
-  Terminal,
   Trash2,
   Upload,
   Wifi,
   WifiOff,
+  Shield,
+  X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAlertStore } from '@/store/alertStore'
 import { useProjectStore } from '@/store/projectStore'
+import { NpmAuditPanel } from './npmAuditPanel'
 import {
   NpmAvailability,
   NpmPackage,
@@ -65,6 +67,7 @@ const NpmManagement = () => {
 
   const [isMissingPackageJson, setIsMissingPackageJson] = useState(false)
   const [isInitializingJson, setIsInitializingJson] = useState(false)
+  const [activeTab, setActiveTab] = useState<'packages' | 'security'>('packages')
 
   const [activeInstall, setActiveInstall] = useState<ActiveInstallState | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
@@ -424,258 +427,383 @@ const NpmManagement = () => {
         </div>
       )}
 
-      <section className="rounded-2xl border border-border/70 bg-background/80 p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h2 className="font-semibold">Add a package</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Search the npm registry and install a package into this project.
-            </p>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={installAsDev}
-              onChange={(event) => setInstallAsDev(event.target.checked)}
-              disabled={isNpmMissing}
-            />
-            Save as dev dependency
-          </label>
-        </div>
-        <form onSubmit={handleSearch} className="mt-4 flex gap-2">
-          <Input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search npm packages"
-            aria-label="Search npm packages"
-            disabled={isNpmMissing}
-          />
-          <Button type="submit" disabled={isSearching || isNpmMissing}>
-            <Search className="mr-2 h-4 w-4" />
-            {isSearching ? 'Searching...' : 'Search'}
-          </Button>
-        </form>
-        {searchResults.length > 0 && (
-          <div className="mt-4 grid gap-2 md:grid-cols-2">
-            {searchResults.map((result) => (
-              <div
-                key={`${result.name}-${result.version}`}
-                className="flex items-center justify-between gap-4 rounded-xl border border-border/60 p-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{result.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {result.version} {result.description ? `- ${result.description}` : ''}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  disabled={Boolean(busyPackage) || isNpmMissing}
-                  onClick={() => installPackage(result)}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Install
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold">Installed packages</h2>
-              <p className="text-sm text-muted-foreground">
-                {isMissingPackageJson
-                  ? 'package.json missing'
-                  : `${packages.length} dependencies in package.json`}
-              </p>
-            </div>
-          </div>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map((item) => (
-                <div
-                  key={item}
-                  className="h-20 animate-pulse rounded-xl border border-border/60 bg-muted/40"
-                />
-              ))}
-            </div>
-          ) : isMissingPackageJson ? (
-            <div className="rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-8 text-center space-y-3">
-              <FileQuestion className="mx-auto h-8 w-8 text-amber-500" />
-              <h3 className="text-base font-semibold">No package.json found</h3>
-              <p className="mx-auto max-w-md text-sm text-muted-foreground">
-                This project directory does not contain a{' '}
-                <code className="text-xs bg-muted px-1 py-0.5 rounded">package.json</code> file.
-                Initialize it to enable dependency management.
-              </p>
-              <Button
-                onClick={handleInitPackageJson}
-                disabled={isInitializingJson || isNpmMissing}
-                className="mt-2"
-              >
-                {isInitializingJson ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Terminal className="mr-2 h-4 w-4" />
-                )}
-                {isInitializingJson ? 'Initializing...' : 'Initialize package.json'}
-              </Button>
-            </div>
-          ) : packages.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
-              <Package className="mx-auto h-7 w-7 text-muted-foreground" />
-              <p className="mt-3 font-medium">No npm packages found</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Use the search above to add your first dependency.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {packages.map((item) => (
-                <button
-                  type="button"
-                  key={item.name}
-                  onClick={() => setSelectedPackage(item)}
-                  className={`flex w-full items-center justify-between gap-4 rounded-xl border p-4 text-left transition-colors hover:bg-muted/50 ${selectedPackage?.name === item.name ? 'border-primary bg-muted/50' : 'border-border/70'}`}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">{item.name}</span>
-                    <span className="mt-1 block truncate text-xs text-muted-foreground">
-                      {item.version}
-                    </span>
-                  </span>
-                  <Badge variant="secondary" className="shrink-0">
-                    {item.dependencyType === 'development' ? 'dev' : 'prod'}
-                  </Badge>
-                </button>
-              ))}
-            </div>
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b pb-2">
+        <Button
+          variant={activeTab === 'packages' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('packages')}
+          className="gap-2"
+        >
+          <Package className="h-4 w-4" />
+          Packages
+          {packages.length > 0 && (
+            <Badge variant="secondary" className="ml-1 text-xs">
+              {packages.length}
+            </Badge>
           )}
-        </section>
+        </Button>
 
-        <aside className="self-start rounded-2xl border border-border/70 bg-background/80 p-5 lg:sticky lg:top-20">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Package details
-          </p>
-          {selectedPackage ? (
-            <div className="mt-4 space-y-5">
+        <Button
+          variant={activeTab === 'security' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('security')}
+          className="gap-2"
+        >
+          <Shield className="h-4 w-4" />
+          Security & Audit
+        </Button>
+      </div>
+
+      {activeTab === 'security' ? (
+        <NpmAuditPanel
+          projectPath={project.path}
+          projectName={project.name}
+          onFixStart={(installId, actionTitle) => {
+            setActiveInstall({
+              id: installId,
+              action: 'audit-fix',
+              title: actionTitle,
+              logs: [],
+            })
+          }}
+          onFixEnd={() => {
+            setActiveInstall(null)
+          }}
+          activeInstallId={activeInstall?.id}
+          isOffline={availability?.installed === true && !availability.online}
+        />
+      ) : (
+        <>
+          <section className="rounded-2xl border border-border/70 bg-background/80 p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <h2 className="break-all text-xl font-semibold">
-                  {metadata?.name || selectedPackage.name}
-                </h2>
+                <h2 className="font-semibold">Add a package</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {isLoadingMetadata
-                    ? 'Loading metadata...'
-                    : metadata?.description || 'No description available.'}
+                  Search the npm registry and install a package into this project.
                 </p>
               </div>
-              <dl className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">Installed</dt>
-                  <dd className="mt-1 font-medium">{selectedPackage.version}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Type</dt>
-                  <dd className="mt-1 font-medium capitalize">{selectedPackage.dependencyType}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">License</dt>
-                  <dd className="mt-1 font-medium">{metadata?.license || 'Unknown'}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Latest checked</dt>
-                  <dd className="mt-1 font-medium">{metadata?.version || 'Unknown'}</dd>
-                </div>
-              </dl>
-              {metadata?.homepage && (
-                <a
-                  className="flex items-center gap-2 text-sm text-primary hover:underline"
-                  href={metadata.homepage}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Package homepage
-                </a>
-              )}
-              <div className="space-y-2 border-t border-border/70 pt-4">
-                <Label htmlFor="package-version">Install a specific version</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="package-version"
-                    value={version}
-                    onChange={(event) => setVersion(event.target.value)}
-                    placeholder="e.g. 1.2.3"
-                    disabled={isNpmMissing}
-                  />
-                  <Button
-                    size="icon"
-                    title="Install version"
-                    aria-label="Install version"
-                    disabled={busyPackage === selectedPackage.name || isNpmMissing}
-                    onClick={installVersion}
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={installAsDev}
+                  onChange={(e) => setInstallAsDev(e.target.checked)}
+                  className="rounded border-border text-primary focus:ring-primary"
+                />
+                Install as devDependency
+              </label>
+            </div>
+
+            <form onSubmit={handleSearch} className="mt-4 flex gap-2">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search npm packages (e.g., lodash, tailwindcss)..."
+                  className="pl-9 pr-9"
+                  disabled={
+                    Boolean(busyPackage) ||
+                    (availability?.installed === true && !availability.online)
+                  }
+                />
+                {searchQuery.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setSearchResults([])
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    title="Clear search"
                   >
-                    <Upload className="h-4 w-4" />
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <Button
+                type="submit"
+                disabled={
+                  isSearching ||
+                  !searchQuery.trim() ||
+                  Boolean(busyPackage) ||
+                  (availability?.installed === true && !availability.online)
+                }
+              >
+                {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+              </Button>
+            </form>
+
+            {searchResults.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
+                  <span>Found {searchResults.length} packages</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchResults([])}
+                    className="h-7 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Hide results
+                  </Button>
+                </div>
+
+                <div className="divide-y divide-border/60 rounded-xl border border-border/70 bg-card">
+                  {searchResults.map((result) => (
+                    <div
+                      key={result.name}
+                      className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm">{result.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {result.version}
+                          </Badge>
+                        </div>
+                        {result.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            {result.description}
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={Boolean(busyPackage) || isNpmMissing}
+                        onClick={() => installPackage(result)}
+                        className="shrink-0"
+                      >
+                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                        Install
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {isMissingPackageJson && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
+              <div className="flex items-start gap-4">
+                <FileQuestion className="h-6 w-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-base text-amber-900 dark:text-amber-200">
+                    No package.json found
+                  </h3>
+                  <p className="text-sm text-amber-800 dark:text-amber-300">
+                    This project doesn&apos;t have a package.json file yet. Initialize one to start
+                    managing dependencies.
+                  </p>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleInitPackageJson}
+                    disabled={isInitializingJson || isNpmMissing}
+                    className="mt-2"
+                  >
+                    {isInitializingJson ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Package className="mr-2 h-4 w-4" />
+                    )}
+                    Initialize package.json
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  disabled={Boolean(busyPackage) || isNpmMissing}
-                  onClick={() =>
-                    runPackageAction(
-                      selectedPackage.name,
-                      (installId) =>
-                        tauriCommands.updateNpmPackage(
-                          project.path,
-                          selectedPackage.name,
-                          installId
-                        ),
-                      `${selectedPackage.name} updated.`,
-                      `Updating ${selectedPackage.name}`
-                    )
-                  }
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Update
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  title="Remove package"
-                  aria-label="Remove package"
-                  disabled={Boolean(busyPackage) || isNpmMissing}
-                  onClick={() => {
-                    if (confirm(`Remove ${selectedPackage.name}?`))
-                      runPackageAction(
-                        selectedPackage.name,
-                        (installId) =>
-                          tauriCommands.removeNpmPackage(
-                            project.path,
-                            selectedPackage.name,
-                            installId
-                          ),
-                        `${selectedPackage.name} removed.`,
-                        `Removing ${selectedPackage.name}`
-                      )
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
             </div>
-          ) : (
-            <p className="mt-4 text-sm leading-6 text-muted-foreground">
-              Select an installed package to inspect metadata or change its version.
-            </p>
           )}
-        </aside>
-      </div>
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-lg">Installed Packages</h2>
+                <Badge variant="secondary">{packages.length} packages</Badge>
+              </div>
+
+              {isLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-16 rounded-xl border border-border/70 bg-card p-4 animate-pulse"
+                    />
+                  ))}
+                </div>
+              ) : packages.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 p-8 text-center text-muted-foreground">
+                  No dependencies listed in package.json.
+                </div>
+              ) : (
+                <div className="divide-y divide-border/60 rounded-2xl border border-border/70 bg-card overflow-hidden">
+                  {packages.map((pkg) => (
+                    <div
+                      key={pkg.name}
+                      onClick={() => setSelectedPackage(pkg)}
+                      className={`flex cursor-pointer items-center justify-between p-4 transition-colors hover:bg-muted/50 ${
+                        selectedPackage?.name === pkg.name ? 'bg-muted/80' : ''
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{pkg.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {pkg.version}
+                          </Badge>
+                        </div>
+                        <Badge
+                          variant={pkg.dependencyType === 'development' ? 'secondary' : 'default'}
+                          className="text-[10px]"
+                        >
+                          {pkg.dependencyType}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={Boolean(busyPackage) || isNpmMissing}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            runPackageAction(
+                              pkg.name,
+                              (installId) =>
+                                tauriCommands.updateNpmPackage(project.path, pkg.name, installId),
+                              `${pkg.name} updated to latest.`,
+                              `Updating ${pkg.name}`
+                            )
+                          }}
+                        >
+                          <Upload className="mr-1.5 h-3.5 w-3.5" />
+                          Latest
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <aside className="rounded-2xl border border-border/70 bg-card p-5 h-fit space-y-4">
+              <h2 className="font-semibold text-lg">Package Details</h2>
+              {selectedPackage ? (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="font-bold text-base">{selectedPackage.name}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Installed: {selectedPackage.version} ({selectedPackage.dependencyType})
+                    </p>
+                  </div>
+
+                  {isLoadingMetadata ? (
+                    <div className="space-y-2 animate-pulse">
+                      <div className="h-4 w-3/4 bg-muted rounded" />
+                      <div className="h-4 w-1/2 bg-muted rounded" />
+                    </div>
+                  ) : metadata ? (
+                    <div className="space-y-3 text-sm">
+                      {metadata.description && (
+                        <p className="text-muted-foreground text-xs">{metadata.description}</p>
+                      )}
+                      {metadata.license && (
+                        <div className="text-xs">
+                          <span className="font-medium text-foreground">License:</span>{' '}
+                          {metadata.license}
+                        </div>
+                      )}
+                      {metadata.homepage && (
+                        <a
+                          href={metadata.homepage}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
+                          Homepage <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                  ) : null}
+
+                  <div className="pt-2 space-y-2 border-t">
+                    <Label htmlFor="version-input" className="text-xs">
+                      Change version / tag
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="version-input"
+                        placeholder="e.g. 1.2.3 or latest"
+                        value={version}
+                        onChange={(e) => setVersion(e.target.value)}
+                        className="h-8 text-xs"
+                      />
+                      <Button
+                        size="sm"
+                        disabled={!version.trim() || Boolean(busyPackage) || isNpmMissing}
+                        onClick={installVersion}
+                      >
+                        Install
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      disabled={Boolean(busyPackage) || isNpmMissing}
+                      onClick={() =>
+                        runPackageAction(
+                          selectedPackage.name,
+                          (installId) =>
+                            tauriCommands.updateNpmPackage(
+                              project.path,
+                              selectedPackage.name,
+                              installId
+                            ),
+                          `${selectedPackage.name} updated to latest.`,
+                          `Updating ${selectedPackage.name}`
+                        )
+                      }
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Update
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      title="Remove package"
+                      aria-label="Remove package"
+                      disabled={Boolean(busyPackage) || isNpmMissing}
+                      onClick={() => {
+                        if (confirm(`Remove ${selectedPackage.name}?`))
+                          runPackageAction(
+                            selectedPackage.name,
+                            (installId) =>
+                              tauriCommands.removeNpmPackage(
+                                project.path,
+                                selectedPackage.name,
+                                installId
+                              ),
+                            `${selectedPackage.name} removed.`,
+                            `Removing ${selectedPackage.name}`
+                          )
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                  Select an installed package to inspect metadata or change its version.
+                </p>
+              )}
+            </aside>
+          </div>
+        </>
+      )}
     </div>
   )
 }

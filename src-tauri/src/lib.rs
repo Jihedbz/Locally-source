@@ -56,6 +56,8 @@ pub fn run() {
             commands::projects::update_npm_package,
             commands::projects::remove_npm_package,
             commands::projects::cancel_npm_install,
+            commands::projects::audit_npm_packages,
+            commands::projects::fix_npm_audit,
             commands::system::get_operating_system_command,
             commands::system::open_in_explorer,
             commands::system::open_in_vscode,

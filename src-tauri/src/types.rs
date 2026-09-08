@@ -54,6 +54,57 @@ pub struct NpmProgressPayload {
     pub stream: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NpmVulnerabilityAdvisory {
+    pub name: String,
+    pub title: Option<String>,
+    pub url: Option<String>,
+    pub severity: String,
+    pub range: Option<String>,
+    pub cwe: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NpmFixAvailable {
+    pub name: Option<String>,
+    pub version: Option<String>,
+    pub is_sem_ver_major: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NpmVulnerabilityItem {
+    pub name: String,
+    pub severity: String,
+    pub is_direct: bool,
+    pub range: Option<String>,
+    pub effects: Vec<String>,
+    pub via: Vec<String>,
+    pub fix_available: Option<NpmFixAvailable>,
+    pub advisories: Vec<NpmVulnerabilityAdvisory>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NpmAuditSummary {
+    pub info: u64,
+    pub low: u64,
+    pub moderate: u64,
+    pub high: u64,
+    pub critical: u64,
+    pub total: u64,
+    pub total_dependencies: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct NpmAuditReport {
+    pub summary: NpmAuditSummary,
+    pub vulnerabilities: Vec<NpmVulnerabilityItem>,
+}
+
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

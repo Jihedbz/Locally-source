@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 
 export interface TauriError extends Error {
@@ -38,6 +39,47 @@ export interface NpmProgressPayload {
   installId: string
   line: string
   stream: 'stdout' | 'stderr'
+}
+
+export interface NpmVulnerabilityAdvisory {
+  name: string
+  title?: string
+  url?: string
+  severity: 'info' | 'low' | 'moderate' | 'high' | 'critical' | string
+  range?: string
+  cwe: string[]
+}
+
+export interface NpmFixAvailable {
+  name?: string
+  version?: string
+  isSemVerMajor?: boolean
+}
+
+export interface NpmVulnerabilityItem {
+  name: string
+  severity: 'info' | 'low' | 'moderate' | 'high' | 'critical' | string
+  isDirect: boolean
+  range?: string
+  effects: string[]
+  via: string[]
+  fixAvailable?: NpmFixAvailable
+  advisories: NpmVulnerabilityAdvisory[]
+}
+
+export interface NpmAuditSummary {
+  info: number
+  low: number
+  moderate: number
+  high: number
+  critical: number
+  total: number
+  totalDependencies: number
+}
+
+export interface NpmAuditReport {
+  summary: NpmAuditSummary
+  vulnerabilities: NpmVulnerabilityItem[]
 }
 
 export class TauriCommandError extends Error implements TauriError {
@@ -205,6 +247,16 @@ export const tauriCommands = {
 
   cancelNpmInstall: (installId: string) =>
     invokeWithErrorHandling<boolean>('cancel_npm_install', { installId }),
+
+  auditNpmPackages: (path: string) =>
+    invokeWithErrorHandling<NpmAuditReport>('audit_npm_packages', { path }),
+
+  fixNpmAudit: (params: { path: string; force?: boolean; installId?: string }) =>
+    invokeWithErrorHandling<string>('fix_npm_audit', {
+      path: params.path,
+      force: params.force ?? false,
+      installId: params.installId,
+    }),
 }
 
 /**
@@ -226,11 +278,11 @@ export function getErrorMessage(error: unknown): string {
  * Hook for handling Tauri command errors with user feedback
  */
 export function useTauriErrorHandler() {
-  const handleError = (error: unknown, context?: string) => {
+  const handleError = useCallback((error: unknown, context?: string) => {
     const message = getErrorMessage(error)
     console.error(`Tauri Error${context ? ` in ${context}` : ''}:`, error)
     return message
-  }
+  }, [])
 
   return { handleError }
 }
