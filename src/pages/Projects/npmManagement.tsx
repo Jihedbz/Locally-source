@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { listen } from '@tauri-apps/api/event'
 import {
   AlertTriangle,
+  ArrowUpCircle,
   ArrowLeft,
   CheckCircle,
   Download,
@@ -29,6 +30,7 @@ import { useProjectStore } from '@/store/projectStore'
 import { NpmAuditPanel } from './npmAuditPanel'
 import {
   NpmAvailability,
+  NpmOutdatedPackage,
   NpmPackage,
   NpmPackageMetadata,
   NpmProgressPayload,
@@ -67,7 +69,10 @@ const NpmManagement = () => {
 
   const [isMissingPackageJson, setIsMissingPackageJson] = useState(false)
   const [isInitializingJson, setIsInitializingJson] = useState(false)
-  const [activeTab, setActiveTab] = useState<'packages' | 'security'>('packages')
+  const [activeTab, setActiveTab] = useState<'packages' | 'outdated' | 'security'>('packages')
+  const [outdatedPackages, setOutdatedPackages] = useState<NpmOutdatedPackage[]>([])
+  const [isLoadingOutdated, setIsLoadingOutdated] = useState(false)
+  const [outdatedError, setOutdatedError] = useState<string | null>(null)
 
   const [activeInstall, setActiveInstall] = useState<ActiveInstallState | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
@@ -111,6 +116,19 @@ const NpmManagement = () => {
     }
   }, [project])
 
+  const loadOutdated = useCallback(async () => {
+    if (!project) return
+    setIsLoadingOutdated(true)
+    setOutdatedError(null)
+    try {
+      setOutdatedPackages(await tauriCommands.getNpmOutdated(project.path))
+    } catch (loadError) {
+      setOutdatedError(loadError instanceof Error ? loadError.message : String(loadError))
+    } finally {
+      setIsLoadingOutdated(false)
+    }
+  }, [project])
+
   useEffect(() => {
     checkAvailability()
   }, [checkAvailability])
@@ -118,8 +136,15 @@ const NpmManagement = () => {
   useEffect(() => {
     setSelectedPackage(null)
     setMetadata(null)
+    setOutdatedPackages([])
     loadPackages()
   }, [loadPackages])
+
+  useEffect(() => {
+    if (activeTab === 'outdated') {
+      loadOutdated()
+    }
+  }, [activeTab, loadOutdated])
 
   useEffect(() => {
     if (!selectedPackage) {
@@ -273,6 +298,22 @@ const NpmManagement = () => {
       show('success', 'Cancellation request sent.')
     } catch (err) {
       show('error', err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const updateOutdatedPackage = (outdatedPackage: NpmOutdatedPackage) => {
+    if (!project) return
+    return runPackageAction(
+      outdatedPackage.name,
+      (installId) => tauriCommands.updateNpmPackage(project.path, outdatedPackage.name, installId),
+      `${outdatedPackage.name} updated to ${outdatedPackage.latest}.`,
+      `Updating ${outdatedPackage.name}`
+    ).then(loadOutdated)
+  }
+
+  const updateAllOutdatedPackages = async () => {
+    for (const outdatedPackage of outdatedPackages) {
+      await updateOutdatedPackage(outdatedPackage)
     }
   }
 
@@ -445,6 +486,21 @@ const NpmManagement = () => {
         </Button>
 
         <Button
+          variant={activeTab === 'outdated' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('outdated')}
+          className="gap-2"
+        >
+          <ArrowUpCircle className="h-4 w-4" />
+          Outdated
+          {outdatedPackages.length > 0 && (
+            <Badge variant="secondary" className="ml-1 text-xs">
+              {outdatedPackages.length}
+            </Badge>
+          )}
+        </Button>
+
+        <Button
           variant={activeTab === 'security' ? 'default' : 'ghost'}
           size="sm"
           onClick={() => setActiveTab('security')}
@@ -473,6 +529,95 @@ const NpmManagement = () => {
           activeInstallId={activeInstall?.id}
           isOffline={availability?.installed === true && !availability.online}
         />
+      ) : activeTab === 'outdated' ? (
+        <section className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-lg">Outdated Packages</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Review packages with newer compatible and latest versions available.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadOutdated}
+                disabled={isLoadingOutdated || Boolean(busyPackage) || isNpmMissing || !availability?.online}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isLoadingOutdated ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              {outdatedPackages.length > 0 && (
+                <Button
+                  size="sm"
+                  onClick={updateAllOutdatedPackages}
+                  disabled={Boolean(busyPackage) || isNpmMissing || !availability?.online}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Update all ({outdatedPackages.length})
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {outdatedError && (
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              <span>Could not check for outdated packages: {outdatedError}</span>
+              <Button variant="outline" size="sm" onClick={loadOutdated}>
+                Try again
+              </Button>
+            </div>
+          )}
+
+          {isLoadingOutdated ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="h-20 animate-pulse rounded-xl border border-border/70 bg-card" />
+              ))}
+            </div>
+          ) : outdatedPackages.length === 0 && !outdatedError ? (
+            <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 p-8 text-center">
+              <CheckCircle className="mx-auto h-8 w-8 text-emerald-500" />
+              <p className="mt-3 font-medium">All packages are up to date</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                npm found no newer versions for this project.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/70 bg-card">
+              {outdatedPackages.map((outdatedPackage) => (
+                <div
+                  key={outdatedPackage.name}
+                  className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{outdatedPackage.name}</span>
+                      <Badge variant="outline">{outdatedPackage.dependencyType}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Current <span className="font-medium text-foreground">{outdatedPackage.current}</span>
+                      <span className="mx-2">→</span>
+                      Compatible <span className="font-medium text-foreground">{outdatedPackage.wanted}</span>
+                      <span className="mx-2">·</span>
+                      Latest <span className="font-medium text-primary">{outdatedPackage.latest}</span>
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateOutdatedPackage(outdatedPackage)}
+                    disabled={Boolean(busyPackage) || isNpmMissing || !availability?.online}
+                  >
+                    <Upload className="mr-2 h-3.5 w-3.5" />
+                    Update
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       ) : (
         <>
           <section className="rounded-2xl border border-border/70 bg-background/80 p-5">

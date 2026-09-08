@@ -12,6 +12,14 @@ export interface NpmPackage {
   dependencyType: 'production' | 'development'
 }
 
+export interface NpmOutdatedPackage {
+  name: string
+  current: string
+  wanted: string
+  latest: string
+  dependencyType: 'production' | 'development'
+}
+
 export interface NpmSearchResult {
   name: string
   version: string
@@ -206,6 +214,9 @@ export const tauriCommands = {
 
   getNpmPackages: (path: string) =>
     invokeWithErrorHandling<NpmPackage[]>('get_npm_packages', { path }),
+
+  getNpmOutdated: (path: string) =>
+    invokeWithErrorHandling<NpmOutdatedPackage[]>('get_npm_outdated', { path }),
 
   searchNpmPackages: (query: string) =>
     invokeWithErrorHandling<NpmSearchResult[]>('search_npm_packages', { query }),

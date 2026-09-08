@@ -50,6 +50,7 @@ pub fn run() {
             commands::projects::check_npm_availability,
             commands::projects::init_package_json,
             commands::projects::get_npm_packages,
+            commands::projects::get_npm_outdated,
             commands::projects::search_npm_packages,
             commands::projects::get_npm_package_metadata,
             commands::projects::install_npm_package,

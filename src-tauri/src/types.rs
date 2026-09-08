@@ -19,6 +19,16 @@ pub struct NpmPackage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct NpmOutdatedPackage {
+    pub name: String,
+    pub current: String,
+    pub wanted: String,
+    pub latest: String,
+    pub dependency_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NpmSearchResult {
     pub name: String,
     pub version: String,

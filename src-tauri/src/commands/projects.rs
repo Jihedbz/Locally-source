@@ -293,6 +293,69 @@ pub async fn get_npm_packages(path: String) -> AppResult<Vec<crate::types::NpmPa
     .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
 }
 
+pub fn parse_npm_outdated_json(
+    content: &str,
+) -> AppResult<Vec<crate::types::NpmOutdatedPackage>> {
+    let parsed: Value = serde_json::from_str(content)?;
+    let Some(packages) = parsed.as_object() else {
+        return Err(AppError::CommandFailed(
+            "npm outdated returned an unexpected JSON shape".to_string(),
+        ));
+    };
+
+    let mut outdated = packages
+        .iter()
+        .filter_map(|(name, value)| {
+            Some(crate::types::NpmOutdatedPackage {
+                name: name.clone(),
+                current: value.get("current")?.as_str()?.to_string(),
+                wanted: value.get("wanted")?.as_str()?.to_string(),
+                latest: value.get("latest")?.as_str()?.to_string(),
+                dependency_type: match value.get("type").and_then(Value::as_str) {
+                    Some("dev") => "development".to_string(),
+                    _ => "production".to_string(),
+                },
+            })
+        })
+        .collect::<Vec<_>>();
+
+    outdated.sort_by(|left, right| left.name.cmp(&right.name));
+    Ok(outdated)
+}
+
+#[command]
+pub async fn get_npm_outdated(path: String) -> AppResult<Vec<crate::types::NpmOutdatedPackage>> {
+    let project_path = get_managed_project_path(&path)?;
+    task::spawn_blocking(move || {
+        let package_json = project_path.join("package.json");
+        if !package_json.exists() {
+            return Err(AppError::FileNotFound(
+                "package.json not found in project directory".to_string(),
+            ));
+        }
+
+        let mut command = std::process::Command::new(npm_command());
+        command.current_dir(&project_path).args(["outdated", "--json"]);
+        let output = command.output().map_err(|e| {
+            AppError::CommandFailed(format_npm_error(&e.to_string()))
+        })?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+        if !stdout.is_empty() {
+            return parse_npm_outdated_json(&stdout);
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if !stderr.is_empty() {
+            Err(AppError::CommandFailed(format_npm_error(&stderr)))
+        } else {
+            Ok(Vec::new())
+        }
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
 #[command]
 pub async fn search_npm_packages(query: String) -> AppResult<Vec<crate::types::NpmSearchResult>> {
     let query = query.trim().to_string();
@@ -843,7 +906,22 @@ pub async fn fix_npm_audit(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_npm_audit_json, validate_project_name};
+    use super::{parse_npm_audit_json, parse_npm_outdated_json, validate_project_name};
+
+    #[test]
+    fn parses_npm_outdated_json() {
+        let packages = parse_npm_outdated_json(
+            r#"{
+                "react": {"current":"18.2.0","wanted":"18.3.1","latest":"19.0.0","type":"prod"},
+                "vite": {"current":"5.0.0","wanted":"5.4.0","latest":"6.0.0","type":"dev"}
+            }"#,
+        )
+        .expect("failed to parse outdated JSON");
+
+        assert_eq!(packages.len(), 2);
+        assert_eq!(packages[0].name, "react");
+        assert_eq!(packages[1].dependency_type, "development");
+    }
 
     #[test]
     fn accepts_safe_project_names() {

@@ -17,7 +17,9 @@ vi.mock('@/lib/tauriUtils', async () => {
       ...actual.tauriCommands,
       checkNpmAvailability: vi.fn(),
       getNpmPackages: vi.fn(),
+      getNpmOutdated: vi.fn(),
       getNpmPackageMetadata: vi.fn(),
+      updateNpmPackage: vi.fn(),
       initPackageJson: vi.fn(),
       installNpmPackage: vi.fn(),
       cancelNpmInstall: vi.fn(),
@@ -66,6 +68,7 @@ describe('NpmManagement Component', () => {
     vi.mocked(tauriCommands.getNpmPackages).mockResolvedValue([
       { name: 'react', version: '18.3.1', dependencyType: 'production' },
     ])
+    vi.mocked(tauriCommands.getNpmOutdated).mockResolvedValue([])
 
     render(
       <BrowserRouter>
@@ -118,6 +121,59 @@ describe('NpmManagement Component', () => {
 
     await waitFor(() => {
       expect(tauriCommands.initPackageJson).toHaveBeenCalledWith('/mock/path/empty-project')
+    })
+  })
+
+  it('loads outdated packages and updates one package', async () => {
+    useProjectStore.setState({
+      selectedProject: {
+        name: 'outdated-app',
+        path: '/mock/path/outdated-app',
+        type: 'react',
+        createdAt: '2026-01-01',
+        pinned: false,
+      },
+    })
+
+    vi.mocked(tauriCommands.checkNpmAvailability).mockResolvedValue({
+      installed: true,
+      version: '10.8.0',
+      online: true,
+    })
+    vi.mocked(tauriCommands.getNpmPackages).mockResolvedValue([])
+    vi.mocked(tauriCommands.getNpmOutdated).mockResolvedValue([
+      {
+        name: 'react',
+        current: '18.2.0',
+        wanted: '18.3.1',
+        latest: '19.0.0',
+        dependencyType: 'production',
+      },
+    ])
+    vi.mocked(tauriCommands.updateNpmPackage).mockResolvedValue('updated')
+
+    render(
+      <BrowserRouter>
+        <NpmManagement />
+      </BrowserRouter>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /Outdated/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('react')).toBeInTheDocument()
+      expect(screen.getByText((content) => content.includes('Current'))).toBeInTheDocument()
+      expect(tauriCommands.getNpmOutdated).toHaveBeenCalledWith('/mock/path/outdated-app')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /^Update$/i }))
+
+    await waitFor(() => {
+      expect(tauriCommands.updateNpmPackage).toHaveBeenCalledWith(
+        '/mock/path/outdated-app',
+        'react',
+        expect.any(String)
+      )
     })
   })
 
