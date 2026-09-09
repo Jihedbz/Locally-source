@@ -7,9 +7,30 @@ import { Project } from '@/types/project'
 describe('useProjects hook', () => {
   beforeEach(() => {
     const projects: Project[] = [
-      { name: 'React App', type: 'react', path: '/path/react', createdAt: '', pinned: false },
-      { name: 'Angular App', type: 'angular', path: '/path/angular', createdAt: '', pinned: false },
-      { name: 'Another React', type: 'react', path: '/path/react2', createdAt: '', pinned: false },
+      {
+        name: 'React App',
+        type: 'react',
+        path: '/path/react',
+        createdAt: '',
+        pinned: false,
+        tags: ['client'],
+      },
+      {
+        name: 'Angular App',
+        type: 'angular',
+        path: '/path/angular',
+        createdAt: '',
+        pinned: false,
+        tags: ['personal'],
+      },
+      {
+        name: 'Another React',
+        type: 'react',
+        path: '/path/react2',
+        createdAt: '',
+        pinned: false,
+        tags: ['client', 'archived'],
+      },
     ]
     useProjectStore.getState().setProjects(projects)
     useProjectStore.getState().setSearchQuery('')
@@ -51,5 +72,13 @@ describe('useProjects hook', () => {
     })
     const { result } = renderHook(() => useProjects())
     expect(result.current.filteredProjects).toHaveLength(0)
+  })
+
+  it('should filter projects by tag', () => {
+    const { result } = renderHook(() => useProjects('client'))
+    expect(result.current.filteredProjects.map((project) => project.name)).toEqual([
+      'React App',
+      'Another React',
+    ])
   })
 })

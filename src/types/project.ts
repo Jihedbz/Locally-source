@@ -4,6 +4,7 @@ export interface Project {
   type: ProjectType
   createdAt: string
   pinned: boolean
+  tags?: string[]
 }
 
 export type ProjectType = 'angular' | 'react' | 'next' | 'vue' | 'other'

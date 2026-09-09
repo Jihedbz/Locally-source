@@ -110,4 +110,28 @@ describe('projectStore', () => {
     expect(writeTextFile).toHaveBeenCalledOnce()
     expect(useProjectStore.getState().projects).toEqual([project])
   })
+
+  it('persists project tags and updates the selected project', async () => {
+    const project: Project = {
+      name: 'Tagged project',
+      path: '/path/tagged',
+      type: 'react',
+      createdAt: '',
+      pinned: false,
+    }
+    vi.mocked(readTextFile).mockResolvedValue(JSON.stringify([project]))
+    vi.mocked(writeTextFile).mockResolvedValue(undefined)
+    useProjectStore.getState().setProjects([project])
+    useProjectStore.getState().setSelectedProject(project)
+
+    await useProjectStore.getState().updateProjectTags(project.name, ['client', 'priority'])
+
+    expect(writeTextFile).toHaveBeenCalledWith(
+      'projects/projects.json',
+      expect.stringContaining('"client"'),
+      expect.objectContaining({ create: true })
+    )
+    expect(useProjectStore.getState().projects[0].tags).toEqual(['client', 'priority'])
+    expect(useProjectStore.getState().selectedProject?.tags).toEqual(['client', 'priority'])
+  })
 })

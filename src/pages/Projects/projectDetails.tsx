@@ -2,7 +2,7 @@ import * as React from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { appDataDir, join } from '@tauri-apps/api/path'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
-import { CalendarDays, Clipboard, Clock, Database, Layers } from 'lucide-react'
+import { CalendarDays, Check, Clipboard, Clock, Database, Layers, Plus, Tag, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useProjectStore } from '@/store/projectStore'
@@ -10,11 +10,20 @@ import { getProjectIcon } from '@/lib/projectUtils'
 
 const ProjectDetails: React.FC = () => {
   const { selectedProject } = useProjectStore()
+  const updateProjectTags = useProjectStore((state) => state.updateProjectTags)
   const [lastModified, setLastModified] = React.useState<Date | null>(null)
   const [folderSize, setFolderSize] = React.useState<string>('Calculating...')
   const [shortenedPath, setShortenedPath] = React.useState<string>('')
   const [isLoadingMetadata, setIsLoadingMetadata] = React.useState(false)
   const [metadataError, setMetadataError] = React.useState<string | null>(null)
+  const [draftTags, setDraftTags] = React.useState<string[]>([])
+  const [tagInput, setTagInput] = React.useState('')
+  const [isSavingTags, setIsSavingTags] = React.useState(false)
+
+  React.useEffect(() => {
+    setDraftTags(selectedProject?.tags || [])
+    setTagInput('')
+  }, [selectedProject])
 
   const getLastModifiedDate = React.useCallback(async (dirPath: string) => {
     try {
@@ -134,6 +143,82 @@ const ProjectDetails: React.FC = () => {
         <p className="mt-2 break-words text-sm leading-6 text-foreground">
           {shortenedPath || 'Loading path...'}
         </p>
+      </div>
+
+      <div className="space-y-3 border-b border-border/70 pb-5">
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <Tag className="h-3.5 w-3.5" /> Tags
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {draftTags.length > 0 ? (
+            draftTags.map((tag) => (
+              <Badge key={tag} variant="secondary" className="gap-1 pr-1">
+                {tag}
+                <button
+                  type="button"
+                  aria-label={`Remove ${tag} tag`}
+                  onClick={() => setDraftTags((current) => current.filter((item) => item !== tag))}
+                  className="rounded-sm p-0.5 hover:bg-background/60"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))
+          ) : (
+            <span className="text-sm text-muted-foreground">No tags yet</span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input
+            aria-label="New project tag"
+            value={tagInput}
+            onChange={(event) => setTagInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              event.preventDefault()
+              const nextTag = tagInput.trim()
+              if (nextTag && !draftTags.some((tag) => tag.toLowerCase() === nextTag.toLowerCase())) {
+                setDraftTags((current) => [...current, nextTag])
+                setTagInput('')
+              }
+            }}
+            placeholder="Add a tag"
+            className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Add project tag"
+            title="Add project tag"
+            onClick={() => {
+              const nextTag = tagInput.trim()
+              if (nextTag && !draftTags.some((tag) => tag.toLowerCase() === nextTag.toLowerCase())) {
+                setDraftTags((current) => [...current, nextTag])
+                setTagInput('')
+              }
+            }}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          className="w-full"
+          disabled={isSavingTags}
+          onClick={async () => {
+            setIsSavingTags(true)
+            try {
+              await updateProjectTags(selectedProject.name, draftTags)
+            } finally {
+              setIsSavingTags(false)
+            }
+          }}
+        >
+          <Check className="mr-2 h-4 w-4" />
+          {isSavingTags ? 'Saving tags...' : 'Save tags'}
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-5">

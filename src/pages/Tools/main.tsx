@@ -1,6 +1,7 @@
 import { ChangeEvent, useMemo, useState } from 'react'
-import { CheckCircle2, FileCode2, Hash, Layers, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, FileCode2, GitCompare, Hash, Regex, SquareCode } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   Card,
   CardContent,
@@ -19,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { decodeJwt, diffLines, findRegexMatches, type JwtDecoded } from './toolUtils'
 
 const algorithms = ['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'] as const
 
@@ -66,6 +68,14 @@ const Tools = () => {
   const [hashInput, setHashInput] = useState('')
   const [hashAlgorithm, setHashAlgorithm] = useState<Algorithm>('SHA-256')
   const [hashOutput, setHashOutput] = useState('')
+  const [jwtInput, setJwtInput] = useState('')
+  const [jwtOutput, setJwtOutput] = useState<JwtDecoded | null>(null)
+  const [jwtError, setJwtError] = useState('')
+  const [regexPattern, setRegexPattern] = useState('')
+  const [regexFlags, setRegexFlags] = useState('gi')
+  const [regexInput, setRegexInput] = useState('')
+  const [diffLeft, setDiffLeft] = useState('')
+  const [diffRight, setDiffRight] = useState('')
 
   const prettyJson = useMemo(() => {
     if (!jsonInput.trim()) return ''
@@ -83,6 +93,21 @@ const Tools = () => {
     return decodeBase64(base64Input)
   }, [base64Input])
 
+  const regexResult = useMemo(() => {
+    try {
+      return { matches: findRegexMatches(regexPattern, regexFlags, regexInput), error: '' }
+    } catch (error) {
+      return {
+        matches: [],
+        error: error instanceof Error ? error.message : 'Invalid regular expression.',
+      }
+    }
+  }, [regexPattern, regexFlags, regexInput])
+  const regexMatches = regexResult.matches
+  const regexError = regexResult.error
+
+  const diffOutput = useMemo(() => diffLines(diffLeft, diffRight), [diffLeft, diffRight])
+
   const handleHash = async () => {
     if (!hashInput.trim()) {
       setHashOutput('Enter text to generate a hash.')
@@ -93,152 +118,132 @@ const Tools = () => {
     setHashOutput(digest)
   }
 
+  const handleJwtDecode = () => {
+    try {
+      setJwtOutput(decodeJwt(jwtInput))
+      setJwtError('')
+    } catch (error) {
+      setJwtOutput(null)
+      setJwtError(error instanceof Error ? error.message : 'Invalid JWT.')
+    }
+  }
+
   const copyToClipboard = async (value: string) => {
     if (!value) return
     await navigator.clipboard.writeText(value)
   }
 
   return (
-    <div className="flex-1 p-6">
-      <div className="mb-6 grid gap-4 md:grid-cols-[1.5fr_1fr]">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Developer Toolkit
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
-            Quick utilities for developers working inside Locally. Format JSON, encode Base64, and
-            generate cryptographic hashes without leaving the app.
-          </p>
+    <div className="min-h-full flex-1 px-4 py-5 md:px-6 md:py-7">
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        <header className="border-b border-border/70 pb-6">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Developer utilities
+            </div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+              Developer Toolkit
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+              Quick utilities for developers working inside Locally. Format JSON, encode Base64, and
+              generate cryptographic hashes without leaving the app.
+            </p>
+          </div>
+        </header>
+      </div>
+
+      <div className="mx-auto mt-6 max-w-[1600px]">
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xl font-semibold">
+                  <span>JSON Formatter</span>
+                  <CheckCircle2 className="size-5 text-emerald-500" />
+                </div>
+                <CardDescription>
+                  Paste JSON and receive a validated, pretty-printed output.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="json-editor">JSON input</Label>
+                <textarea
+                  id="json-editor"
+                  rows={8}
+                  value={jsonInput}
+                  onChange={(event) => setJsonInput(event.target.value)}
+                  placeholder='{"name":"Locally","version":"0.1.0"}'
+                  className="min-h-[180px] w-full resize-none rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none transition focus:border-ring focus:ring-ring/50"
+                />
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                  <span>Result</span>
+                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(prettyJson)}>
+                    Copy result
+                  </Button>
+                </div>
+                <pre className="min-h-[180px] overflow-auto rounded-lg border border-input bg-muted/10 p-4 text-sm leading-6">
+                  {prettyJson || 'No JSON entered yet.'}
+                </pre>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xl font-semibold">
+                  <span>Base64 Utility</span>
+                  <FileCode2 className="size-5 text-sky-500" />
+                </div>
+                <CardDescription>
+                  Encode and decode Base64 text for sharing, config, and quick checks.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="base64-input">Input text</Label>
+                <Input
+                  id="base64-input"
+                  value={base64Input}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    setBase64Input(event.target.value)
+                  }
+                  placeholder="Paste text or Base64 here"
+                />
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                  <span>Encoded</span>
+                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(base64Encoded)}>
+                    Copy
+                  </Button>
+                </div>
+                <div className="rounded-lg border border-input bg-muted/10 p-3 text-sm leading-6">
+                  {base64Encoded || 'No input to encode.'}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                  <span>Decoded</span>
+                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(base64Decoded)}>
+                    Copy
+                  </Button>
+                </div>
+                <div className="rounded-lg border border-input bg-muted/10 p-3 text-sm leading-6">
+                  {base64Decoded || 'No input to decode.'}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-
-        <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/10 shadow-lg shadow-primary/5">
-          <CardHeader>
-            <CardTitle>Built for speed</CardTitle>
-            <CardDescription>Useful helpers for everyday developer workflows.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <ShieldCheck className="size-5 text-primary" />
-              Browser-only utilities with no server round trips
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Layers className="size-5 text-primary" />
-              JSON validation and formatting in real time
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <FileCode2 className="size-5 text-primary" />
-              Base64 and hash generators for quick tasks
-            </div>
-          </CardContent>
-          <CardFooter className="gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => document.getElementById('json-editor')?.focus()}
-            >
-              Start with JSON
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => document.getElementById('hash-input')?.focus()}
-            >
-              Explore hashes
-            </Button>
-          </CardFooter>
-        </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xl font-semibold">
-                <span>JSON Formatter</span>
-                <CheckCircle2 className="size-5 text-emerald-500" />
-              </div>
-              <CardDescription>
-                Paste JSON and receive a validated, pretty-printed output.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="json-editor">JSON input</Label>
-              <textarea
-                id="json-editor"
-                rows={8}
-                value={jsonInput}
-                onChange={(event) => setJsonInput(event.target.value)}
-                placeholder='{"name":"Locally","version":"0.1.0"}'
-                className="min-h-[180px] w-full resize-none rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none transition focus:border-ring focus:ring-ring/50"
-              />
-            </div>
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                <span>Result</span>
-                <Button variant="ghost" size="sm" onClick={() => copyToClipboard(prettyJson)}>
-                  Copy result
-                </Button>
-              </div>
-              <pre className="min-h-[180px] overflow-auto rounded-lg border border-input bg-muted/10 p-4 text-sm leading-6">
-                {prettyJson || 'No JSON entered yet.'}
-              </pre>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xl font-semibold">
-                <span>Base64 Utility</span>
-                <FileCode2 className="size-5 text-sky-500" />
-              </div>
-              <CardDescription>
-                Encode and decode Base64 text for sharing, config, and quick checks.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="base64-input">Input text</Label>
-              <Input
-                id="base64-input"
-                value={base64Input}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  setBase64Input(event.target.value)
-                }
-                placeholder="Paste text or Base64 here"
-              />
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                <span>Encoded</span>
-                <Button variant="ghost" size="sm" onClick={() => copyToClipboard(base64Encoded)}>
-                  Copy
-                </Button>
-              </div>
-              <div className="rounded-lg border border-input bg-muted/10 p-3 text-sm leading-6">
-                {base64Encoded || 'No input to encode.'}
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                <span>Decoded</span>
-                <Button variant="ghost" size="sm" onClick={() => copyToClipboard(base64Decoded)}>
-                  Copy
-                </Button>
-              </div>
-              <div className="rounded-lg border border-input bg-muted/10 p-3 text-sm leading-6">
-                {base64Decoded || 'No input to decode.'}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="mx-auto mt-6 grid max-w-[1600px] gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="overflow-hidden">
           <CardHeader>
             <div className="space-y-2">
@@ -349,6 +354,188 @@ const Tools = () => {
               Sample Base64
             </Button>
           </CardFooter>
+        </Card>
+      </div>
+
+      <div className="mx-auto mt-6 grid max-w-[1600px] gap-6 xl:grid-cols-2">
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xl font-semibold">
+                <span>JWT Decoder</span>
+                <SquareCode className="size-5 text-amber-500" />
+              </div>
+              <CardDescription>Inspect a JWT header and payload locally.</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="jwt-input">JWT token</Label>
+              <textarea
+                id="jwt-input"
+                rows={4}
+                value={jwtInput}
+                onChange={(event) => setJwtInput(event.target.value)}
+                placeholder="eyJhbGciOiJIUzI1NiIs..."
+                className="min-h-[112px] w-full resize-none rounded-lg border border-input bg-transparent px-3 py-2 font-mono text-xs leading-5 shadow-sm outline-none transition focus:border-ring focus:ring-ring/50"
+              />
+            </div>
+            <Button onClick={handleJwtDecode} disabled={!jwtInput.trim()}>
+              Decode token
+            </Button>
+            {jwtError && <p className="text-sm text-destructive">{jwtError}</p>}
+            {jwtOutput && (
+              <div className="grid gap-3 md:grid-cols-2">
+                {(['header', 'payload'] as const).map((section) => (
+                  <div key={section} className="min-w-0 space-y-2">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span className="capitalize">{section}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyToClipboard(JSON.stringify(jwtOutput[section], null, 2))}
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                    <pre className="max-h-52 overflow-auto rounded-lg border border-input bg-muted/10 p-3 text-xs leading-5">
+                      {JSON.stringify(jwtOutput[section], null, 2)}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xl font-semibold">
+                <span>Regex Tester</span>
+                <Regex className="size-5 text-rose-500" />
+              </div>
+              <CardDescription>
+                Test a pattern against text and inspect every match.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+              <div className="grid gap-2">
+                <Label htmlFor="regex-pattern">Pattern</Label>
+                <Input
+                  id="regex-pattern"
+                  value={regexPattern}
+                  onChange={(event) => setRegexPattern(event.target.value)}
+                  placeholder="\\b(project|app)\\b"
+                  className="font-mono"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="regex-flags">Flags</Label>
+                <Input
+                  id="regex-flags"
+                  value={regexFlags}
+                  onChange={(event) => setRegexFlags(event.target.value)}
+                  placeholder="gi"
+                  className="font-mono"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="regex-input">Test text</Label>
+              <textarea
+                id="regex-input"
+                rows={5}
+                value={regexInput}
+                onChange={(event) => setRegexInput(event.target.value)}
+                placeholder="Paste text to test..."
+                className="min-h-[130px] w-full resize-none rounded-lg border border-input bg-transparent px-3 py-2 text-sm leading-6 shadow-sm outline-none transition focus:border-ring focus:ring-ring/50"
+              />
+            </div>
+            {regexError ? (
+              <p className="text-sm text-destructive">{regexError}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {regexPattern
+                  ? `${regexMatches.length} match${regexMatches.length === 1 ? '' : 'es'}`
+                  : 'Enter a pattern to test.'}
+              </p>
+            )}
+            {regexMatches.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {regexMatches.map((match, index) => (
+                  <Badge key={`${match.index}-${index}`} variant="secondary" className="font-mono">
+                    {match.value || '(empty)'}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden xl:col-span-2">
+          <CardHeader>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xl font-semibold">
+                <span>Diff Viewer</span>
+                <GitCompare className="size-5 text-emerald-500" />
+              </div>
+              <CardDescription>Compare two text blocks line by line.</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="diff-left">Original</Label>
+                <textarea
+                  id="diff-left"
+                  rows={8}
+                  value={diffLeft}
+                  onChange={(event) => setDiffLeft(event.target.value)}
+                  placeholder="Original text..."
+                  className="min-h-[190px] w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 font-mono text-xs leading-5 shadow-sm outline-none transition focus:border-ring focus:ring-ring/50"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="diff-right">Changed</Label>
+                <textarea
+                  id="diff-right"
+                  rows={8}
+                  value={diffRight}
+                  onChange={(event) => setDiffRight(event.target.value)}
+                  placeholder="Changed text..."
+                  className="min-h-[190px] w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 font-mono text-xs leading-5 shadow-sm outline-none transition focus:border-ring focus:ring-ring/50"
+                />
+              </div>
+            </div>
+            <div className="overflow-auto rounded-lg border border-input bg-muted/10 font-mono text-xs leading-6">
+              {diffOutput.length === 0 ? (
+                <p className="p-4 text-muted-foreground">
+                  Enter text in either panel to see the diff.
+                </p>
+              ) : (
+                diffOutput.map((line, index) => (
+                  <div
+                    key={`${line.type}-${index}`}
+                    className={`whitespace-pre-wrap px-4 ${
+                      line.type === 'added'
+                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                        : line.type === 'removed'
+                          ? 'bg-red-500/10 text-red-700 dark:text-red-300'
+                          : 'text-muted-foreground'
+                    }`}
+                  >
+                    <span className="mr-3 inline-block w-4 select-none text-muted-foreground">
+                      {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
+                    </span>
+                    {line.value || ' '}
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
         </Card>
       </div>
     </div>

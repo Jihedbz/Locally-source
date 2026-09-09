@@ -16,6 +16,7 @@ interface ProjectState {
   setViewMode: (mode: 'grid' | 'list') => void
   loadProjects: () => Promise<void>
   addProject: (project: Project) => Promise<void>
+  updateProjectTags: (projectName: string, tags: string[]) => Promise<void>
   saveProjects: (projects: Project[]) => Promise<void>
 }
 
@@ -82,6 +83,24 @@ export const useProjectStore = create<ProjectState>((set) => ({
       create: true,
     })
     set({ projects: updatedProjects })
+  },
+
+  updateProjectTags: async (projectName, tags) => {
+    const projects = await readProjects()
+    const updatedProjects = projects.map((project) =>
+      project.name === projectName ? { ...project, tags } : project
+    )
+    await writeTextFile(PROJECTS_FILE, JSON.stringify(updatedProjects, null, 2), {
+      baseDir: BaseDirectory.AppData,
+      create: true,
+    })
+    set((state) => ({
+      projects: updatedProjects,
+      selectedProject:
+        state.selectedProject?.name === projectName
+          ? { ...state.selectedProject, tags }
+          : state.selectedProject,
+    }))
   },
 
   saveProjects: async (projects) => {

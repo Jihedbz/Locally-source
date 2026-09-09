@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, memo } from 'react'
+import { useCallback, useEffect, memo, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +17,7 @@ import {
   Search,
   Sparkles,
   SlidersHorizontal,
+  Tag,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -36,13 +37,29 @@ import { getProjectIcon, getProjectColor } from '@/lib/projectUtils'
 
 const Projects = () => {
   const navigate = useNavigate()
+  const [tagFilter, setTagFilter] = useState('all')
   const { searchQuery, setSearchQuery, viewMode, setViewMode, projects, isLoading } =
     useProjectStore()
-  const { filteredProjects, selectedProject, setSelectedProject, loadProjects } = useProjects()
+  const { filteredProjects, selectedProject, setSelectedProject, loadProjects } =
+    useProjects(tagFilter)
+
+  const availableTags = useMemo(
+    () =>
+      Array.from(new Set(projects.flatMap((project) => project.tags || []))).sort((a, b) =>
+        a.localeCompare(b)
+      ),
+    [projects]
+  )
 
   useEffect(() => {
     loadProjects()
   }, [loadProjects])
+
+  useEffect(() => {
+    if (tagFilter !== 'all' && !availableTags.includes(tagFilter)) {
+      setTagFilter('all')
+    }
+  }, [availableTags, tagFilter])
 
   const handleProjectClick = useCallback(
     (project: Project) => {
@@ -67,6 +84,15 @@ const Projects = () => {
             <div className="min-w-0">
               <CardTitle className="text-lg">{project.name}</CardTitle>
               <CardDescription className="capitalize">{project.type}</CardDescription>
+              {project.tags && project.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {project.tags.map((tag) => (
+                    <Badge key={tag} variant="outline" className="text-[10px]">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           {project.pinned && (
@@ -112,6 +138,15 @@ const Projects = () => {
             <div>
               <h3 className="font-semibold text-base">{project.name}</h3>
               <p className="text-sm text-muted-foreground capitalize">{project.type}</p>
+              {project.tags && project.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {project.tags.map((tag) => (
+                    <Badge key={tag} variant="outline" className="text-[10px]">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div className="text-right text-sm text-muted-foreground">
@@ -224,6 +259,22 @@ const Projects = () => {
                 />
               </div>
               <div className="flex items-center gap-2 border-t border-border/60 pt-3 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
+                <Tag className="h-4 w-4 text-muted-foreground" />
+                <select
+                  aria-label="Filter by tag"
+                  value={tagFilter}
+                  onChange={(event) => setTagFilter(event.target.value)}
+                  className="h-10 rounded-md border-0 bg-muted/60 px-3 text-sm outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="all">All tags</option>
+                  {availableTags.map((tag) => (
+                    <option key={tag} value={tag}>
+                      {tag}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2 border-t border-border/60 pt-3 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
                 <span className="mr-auto flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground sm:hidden">
                   <SlidersHorizontal className="h-3.5 w-3.5" /> View
                 </span>
@@ -254,7 +305,9 @@ const Projects = () => {
                 <p className="text-sm text-muted-foreground">
                   {searchQuery
                     ? `Results for "${searchQuery}"`
-                    : 'Select a project to view its details'}
+                    : tagFilter !== 'all'
+                      ? `Filtered by tag: ${tagFilter}`
+                      : 'Select a project to view its details'}
                 </p>
               </div>
               <span className="text-xs font-medium text-muted-foreground">
@@ -274,21 +327,21 @@ const Projects = () => {
             ) : filteredProjects.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-14 text-center">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-background">
-                  {searchQuery ? (
+                  {searchQuery || tagFilter !== 'all' ? (
                     <Search className="h-6 w-6 text-muted-foreground" />
                   ) : (
                     <FolderPlus className="h-6 w-6 text-muted-foreground" />
                   )}
                 </div>
                 <h3 className="mt-5 font-semibold">
-                  {searchQuery ? 'No matching projects' : 'Your library is empty'}
+                  {searchQuery || tagFilter !== 'all' ? 'No matching projects' : 'Your library is empty'}
                 </h3>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                  {searchQuery
-                    ? 'Try a different name or framework.'
+                  {searchQuery || tagFilter !== 'all'
+                    ? 'Try a different name, framework, or tag.'
                     : 'Create a workspace to start building your local project library.'}
                 </p>
-                {!searchQuery && (
+                {!searchQuery && tagFilter === 'all' && (
                   <Button className="mt-5" onClick={() => navigate('/nextjs')}>
                     <Sparkles className="mr-2 h-4 w-4" />
                     Create your first project

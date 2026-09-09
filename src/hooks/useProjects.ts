@@ -9,7 +9,7 @@ import { useProjectStore } from '@/store/projectStore'
  *
  * @returns {Object} An object containing projects, filteredProjects, and store actions.
  */
-export const useProjects = () => {
+export const useProjects = (tagFilter = 'all') => {
   const { projects, searchQuery, selectedProject, setSelectedProject, setProjects, loadProjects } =
     useProjectStore()
 
@@ -18,9 +18,11 @@ export const useProjects = () => {
     return projects.filter(
       (project) =>
         project.name.toLowerCase().includes(searchLower) ||
-        project.type.toLowerCase().includes(searchLower)
+        project.type.toLowerCase().includes(searchLower) ||
+        (project.tags || []).some((tag) => tag.toLowerCase().includes(searchLower))
     )
-  }, [projects, searchQuery])
+    .filter((project) => tagFilter === 'all' || (project.tags || []).includes(tagFilter))
+  }, [projects, searchQuery, tagFilter])
 
   return {
     projects,

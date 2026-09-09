@@ -1,6 +1,5 @@
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
-import { Badge } from '@/components/ui/badge'
 import { Zap } from 'lucide-react'
 
 export function TeamSwitcher() {
@@ -12,19 +11,14 @@ export function TeamSwitcher() {
             <SidebarMenuButton
               size="lg"
               tooltip="Locally workspace"
-              className="hover-lift data-[state=open]:bg-accent/50 transition-all duration-200"
+              className="h-14 px-2 data-[state=open]:bg-sidebar-accent group-data-[collapsible=icon]:justify-center"
             >
-              <div className="bg-gradient-to-br from-primary to-accent text-primary-foreground flex aspect-square size-10 items-center justify-center rounded-xl shadow-lg transition-all group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:rounded-lg">
-                <Zap className="h-5 w-5" />
+              <div className="flex aspect-square size-9 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground group-data-[collapsible=icon]:size-8">
+                <Zap className="h-4 w-4" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-bold gradient-text">Locally</span>
-                  <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
-                    Desktop
-                  </Badge>
-                </div>
-                <span className="truncate text-xs text-muted-foreground">Local workspace</span>
+                <span className="truncate font-semibold tracking-tight">Locally</span>
+                <span className="truncate text-xs text-muted-foreground">Workspace manager</span>
               </div>
             </SidebarMenuButton>
           </DropdownMenuTrigger>

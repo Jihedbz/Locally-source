@@ -60,17 +60,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar
       collapsible="icon"
       {...props}
-      className="border-r-0 bg-gradient-to-b from-sidebar via-sidebar to-muted/20"
+      className="border-r border-sidebar-border/70 bg-sidebar"
     >
-      <SidebarHeader className="border-b border-border/60 p-3 group-data-[collapsible=icon]:p-2">
+      <SidebarHeader className="border-b border-sidebar-border/70 p-3 group-data-[collapsible=icon]:p-2">
         <TeamSwitcher />
       </SidebarHeader>
-      <SidebarContent className="px-2 py-3 group-data-[collapsible=icon]:px-1">
+      <SidebarContent className="px-1 py-2 group-data-[collapsible=icon]:px-0">
         <NavMain items={data.navMain} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
-      <SidebarFooter className="border-t border-border/60 p-3 group-data-[collapsible=icon]:p-2">
-        <div className="flex w-full items-center justify-between group-data-[collapsible=icon]:justify-center">
+      <SidebarFooter className="border-t border-sidebar-border/70 p-3 group-data-[collapsible=icon]:p-2">
+        <div className="flex items-center justify-between rounded-lg bg-sidebar-accent/60 px-2 py-1.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:px-0">
+          <span className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+            Appearance
+          </span>
           <ModeToggle />
         </div>
       </SidebarFooter>
