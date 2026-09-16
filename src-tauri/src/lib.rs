@@ -6,7 +6,7 @@ pub mod utils;
 
 pub use types::*;
 pub use utils::*;
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -59,6 +59,8 @@ pub fn run() {
             commands::projects::cancel_npm_install,
             commands::projects::audit_npm_packages,
             commands::projects::fix_npm_audit,
+            commands::projects::start_dev_server,
+            commands::projects::stop_dev_server,
             commands::system::get_operating_system_command,
             commands::system::open_in_explorer,
             commands::system::open_in_vscode,
@@ -66,6 +68,11 @@ pub fn run() {
             commands::system::get_last_modified_command,
             commands::cleanup::clean_project,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building Tauri application")
+        .run(|app_handle, event| {
+            if matches!(event, RunEvent::ExitRequested { .. }) {
+                app_handle.state::<utils::ProcessManager>().stop_all();
+            }
+        });
 }

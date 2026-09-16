@@ -40,7 +40,7 @@ const Projects = () => {
   const [tagFilter, setTagFilter] = useState('all')
   const { searchQuery, setSearchQuery, viewMode, setViewMode, projects, isLoading } =
     useProjectStore()
-  const { filteredProjects, selectedProject, setSelectedProject, loadProjects } =
+  const { filteredProjects, selectedProject, setSelectedProject } =
     useProjects(tagFilter)
 
   const availableTags = useMemo(
@@ -50,10 +50,6 @@ const Projects = () => {
       ),
     [projects]
   )
-
-  useEffect(() => {
-    loadProjects()
-  }, [loadProjects])
 
   useEffect(() => {
     if (tagFilter !== 'all' && !availableTags.includes(tagFilter)) {

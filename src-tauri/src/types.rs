@@ -64,6 +64,15 @@ pub struct NpmProgressPayload {
     pub stream: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DevServerOutputPayload {
+    pub session_id: String,
+    pub line: String,
+    pub stream: String,
+    pub status: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct NpmVulnerabilityAdvisory {

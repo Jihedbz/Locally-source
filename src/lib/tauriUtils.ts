@@ -49,6 +49,13 @@ export interface NpmProgressPayload {
   stream: 'stdout' | 'stderr'
 }
 
+export interface DevServerOutputPayload {
+  sessionId: string
+  line: string
+  stream: 'stdout' | 'stderr'
+  status: 'started' | 'output' | 'stopped' | 'failed' | string
+}
+
 export interface NpmVulnerabilityAdvisory {
   name: string
   title?: string
@@ -258,6 +265,12 @@ export const tauriCommands = {
 
   cancelNpmInstall: (installId: string) =>
     invokeWithErrorHandling<boolean>('cancel_npm_install', { installId }),
+
+  startDevServer: (path: string, sessionId: string) =>
+    invokeWithErrorHandling<string>('start_dev_server', { path, sessionId }),
+
+  stopDevServer: (sessionId: string) =>
+    invokeWithErrorHandling<boolean>('stop_dev_server', { sessionId }),
 
   auditNpmPackages: (path: string) =>
     invokeWithErrorHandling<NpmAuditReport>('audit_npm_packages', { path }),

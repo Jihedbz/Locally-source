@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/label'
 import { useAlertStore } from '@/store/alertStore'
 import { useProjectStore } from '@/store/projectStore'
 import { NpmAuditPanel } from './npmAuditPanel'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   NpmAvailability,
   NpmOutdatedPackage,
@@ -75,6 +76,7 @@ const NpmManagement = () => {
   const [outdatedError, setOutdatedError] = useState<string | null>(null)
 
   const [activeInstall, setActiveInstall] = useState<ActiveInstallState | null>(null)
+  const [packageToRemove, setPackageToRemove] = useState<NpmPackage | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
 
   const checkAvailability = useCallback(async () => {
@@ -299,6 +301,18 @@ const NpmManagement = () => {
     } catch (err) {
       show('error', err instanceof Error ? err.message : String(err))
     }
+  }
+
+  const removeSelectedPackage = () => {
+    if (!project || !packageToRemove) return
+    const packageName = packageToRemove.name
+    setPackageToRemove(null)
+    runPackageAction(
+      packageName,
+      (installId) => tauriCommands.removeNpmPackage(project.path, packageName, installId),
+      `${packageName} removed.`,
+      `Removing ${packageName}`
+    )
   }
 
   const updateOutdatedPackage = (outdatedPackage: NpmOutdatedPackage) => {
@@ -543,7 +557,9 @@ const NpmManagement = () => {
                 variant="outline"
                 size="sm"
                 onClick={loadOutdated}
-                disabled={isLoadingOutdated || Boolean(busyPackage) || isNpmMissing || !availability?.online}
+                disabled={
+                  isLoadingOutdated || Boolean(busyPackage) || isNpmMissing || !availability?.online
+                }
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${isLoadingOutdated ? 'animate-spin' : ''}`} />
                 Refresh
@@ -573,7 +589,10 @@ const NpmManagement = () => {
           {isLoadingOutdated ? (
             <div className="space-y-2">
               {[1, 2, 3].map((item) => (
-                <div key={item} className="h-20 animate-pulse rounded-xl border border-border/70 bg-card" />
+                <div
+                  key={item}
+                  className="h-20 animate-pulse rounded-xl border border-border/70 bg-card"
+                />
               ))}
             </div>
           ) : outdatedPackages.length === 0 && !outdatedError ? (
@@ -597,11 +616,14 @@ const NpmManagement = () => {
                       <Badge variant="outline">{outdatedPackage.dependencyType}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Current <span className="font-medium text-foreground">{outdatedPackage.current}</span>
+                      Current{' '}
+                      <span className="font-medium text-foreground">{outdatedPackage.current}</span>
                       <span className="mx-2">→</span>
-                      Compatible <span className="font-medium text-foreground">{outdatedPackage.wanted}</span>
+                      Compatible{' '}
+                      <span className="font-medium text-foreground">{outdatedPackage.wanted}</span>
                       <span className="mx-2">·</span>
-                      Latest <span className="font-medium text-primary">{outdatedPackage.latest}</span>
+                      Latest{' '}
+                      <span className="font-medium text-primary">{outdatedPackage.latest}</span>
                     </p>
                   </div>
                   <Button
@@ -921,20 +943,7 @@ const NpmManagement = () => {
                       title="Remove package"
                       aria-label="Remove package"
                       disabled={Boolean(busyPackage) || isNpmMissing}
-                      onClick={() => {
-                        if (confirm(`Remove ${selectedPackage.name}?`))
-                          runPackageAction(
-                            selectedPackage.name,
-                            (installId) =>
-                              tauriCommands.removeNpmPackage(
-                                project.path,
-                                selectedPackage.name,
-                                installId
-                              ),
-                            `${selectedPackage.name} removed.`,
-                            `Removing ${selectedPackage.name}`
-                          )
-                      }}
+                      onClick={() => setPackageToRemove(selectedPackage)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -949,6 +958,18 @@ const NpmManagement = () => {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={packageToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open && !busyPackage) setPackageToRemove(null)
+        }}
+        title="Remove package?"
+        description={`Remove ${packageToRemove?.name || 'this package'} from the project?`}
+        confirmLabel="Remove package"
+        onConfirm={removeSelectedPackage}
+        isBusy={Boolean(busyPackage)}
+      />
     </div>
   )
 }

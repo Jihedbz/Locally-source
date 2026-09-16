@@ -3,6 +3,8 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::time::UNIX_EPOCH;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 /// Format bytes to human-readable size
 pub fn format_size(size: u64) -> String {
@@ -111,6 +113,9 @@ pub fn execute_command(cmd: &str, args: &[&str], current_dir: Option<&Path>) -> 
 pub fn launch_detached(cmd: &str, args: &[&str], current_dir: Option<&Path>) -> AppResult<String> {
     let mut command = Command::new(cmd);
 
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x08000000);
+
     if let Some(dir) = current_dir {
         command.current_dir(dir);
     }
@@ -164,12 +169,30 @@ impl ProcessManager {
         if let Some(child_arc) = child_arc {
             if let Ok(mut guard) = child_arc.lock() {
                 if let Some(mut child) = guard.take() {
+                    #[cfg(target_os = "windows")]
+                    {
+                        let _ = Command::new("taskkill")
+                            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+                            .status();
+                    }
                     let _ = child.kill();
                     return true;
                 }
             }
         }
         false
+    }
+
+    pub fn stop_all(&self) {
+        let ids = self
+            .processes
+            .lock()
+            .map(|guard| guard.keys().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        for id in ids {
+            let _ = self.cancel(&id);
+        }
     }
 }
 

@@ -28,10 +28,17 @@ import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import GlobalAlert from './components/Structure/globalAlert'
 import ErrorBoundary from './components/ErrorBoundary'
+import { useProjectStore } from './store/projectStore'
+import { useEffect } from 'react'
 
 function App() {
   const location = useLocation()
+  const loadProjects = useProjectStore((state) => state.loadProjects)
   const pathnames = location.pathname.split('/').filter(Boolean)
+
+  useEffect(() => {
+    loadProjects()
+  }, [loadProjects])
 
   const routeMap: Record<string, string> = {
     '': 'Home',

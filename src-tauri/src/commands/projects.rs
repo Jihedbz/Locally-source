@@ -670,6 +670,167 @@ pub async fn cancel_npm_install(
     Ok(cancelled)
 }
 
+#[command]
+pub async fn start_dev_server(
+    path: String,
+    session_id: String,
+    handle: AppHandle,
+    process_mgr: State<'_, ProcessManager>,
+) -> AppResult<String> {
+    let project_path = get_managed_project_path(&path)?;
+    let package_json = project_path.join("package.json");
+    if !package_json.exists() {
+        return Err(AppError::FileNotFound(
+            "package.json not found in project directory".to_string(),
+        ));
+    }
+
+    let session_id = session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err(AppError::CommandFailed(
+            "Dev server session ID is required".to_string(),
+        ));
+    }
+
+    let pm = process_mgr.inner().clone();
+    task::spawn_blocking(move || {
+        use std::io::{BufRead, BufReader};
+        use std::process::Stdio;
+        use tauri::Emitter;
+
+        if !project_path.join("node_modules").exists() {
+            let _ = handle.emit(
+                "dev-server-output",
+                crate::types::DevServerOutputPayload {
+                    session_id: session_id.clone(),
+                    line: "Dependencies are not installed; running npm install...".to_string(),
+                    stream: "stdout".to_string(),
+                    status: "installing".to_string(),
+                },
+            );
+            execute_npm_with_progress(
+                &handle,
+                &pm,
+                Some(&session_id),
+                &project_path,
+                vec!["install".to_string()],
+            )?;
+            let _ = handle.emit(
+                "dev-server-output",
+                crate::types::DevServerOutputPayload {
+                    session_id: session_id.clone(),
+                    line: "Dependencies installed.".to_string(),
+                    stream: "stdout".to_string(),
+                    status: "output".to_string(),
+                },
+            );
+        }
+
+        let mut command = std::process::Command::new(npm_command());
+        command.current_dir(&project_path).args(["run", "dev"]);
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
+        let child = command.spawn().map_err(|error| {
+            AppError::CommandFailed(format_npm_error(&error.to_string()))
+        })?;
+        let child_arc = pm.register(session_id.clone(), child);
+
+        let (stdout, stderr) = {
+            let mut guard = child_arc
+                .lock()
+                .map_err(|_| AppError::PermissionDenied("Failed to access dev server".to_string()))?;
+            let child = guard
+                .as_mut()
+                .ok_or_else(|| AppError::CommandFailed("Dev server stopped unexpectedly".to_string()))?;
+            (child.stdout.take(), child.stderr.take())
+        };
+
+        let output_handle = handle.clone();
+        let output_session = session_id.clone();
+        let read_stream = move |stream: Option<std::process::ChildStdout>, stream_name: &'static str| {
+            let Some(stream) = stream else { return };
+            let handle = output_handle.clone();
+            let session_id = output_session.clone();
+            std::thread::spawn(move || {
+                for line in BufReader::new(stream).lines().flatten() {
+                    let _ = handle.emit(
+                        "dev-server-output",
+                        crate::types::DevServerOutputPayload {
+                            session_id: session_id.clone(),
+                            line,
+                            stream: stream_name.to_string(),
+                            status: "output".to_string(),
+                        },
+                    );
+                }
+            });
+        };
+
+        read_stream(stdout, "stdout");
+        if let Some(stderr) = stderr {
+            let handle = handle.clone();
+            let session_id = session_id.clone();
+            std::thread::spawn(move || {
+                for line in BufReader::new(stderr).lines().flatten() {
+                    let _ = handle.emit(
+                        "dev-server-output",
+                        crate::types::DevServerOutputPayload {
+                            session_id: session_id.clone(),
+                            line,
+                            stream: "stderr".to_string(),
+                            status: "output".to_string(),
+                        },
+                    );
+                }
+            });
+        }
+
+        let _ = handle.emit(
+            "dev-server-output",
+            crate::types::DevServerOutputPayload {
+                session_id: session_id.clone(),
+                line: "Starting npm run dev...".to_string(),
+                stream: "stdout".to_string(),
+                status: "started".to_string(),
+            },
+        );
+
+        let wait_arc = child_arc;
+        let wait_handle = handle.clone();
+        let wait_session = session_id.clone();
+        std::thread::spawn(move || {
+            if let Ok(mut guard) = wait_arc.lock() {
+                if let Some(mut child) = guard.take() {
+                    let _ = child.wait();
+                }
+            }
+            pm.unregister(&wait_session);
+            let _ = wait_handle.emit(
+                "dev-server-output",
+                crate::types::DevServerOutputPayload {
+                    session_id: wait_session,
+                    line: "Dev server stopped.".to_string(),
+                    stream: "stdout".to_string(),
+                    status: "stopped".to_string(),
+                },
+            );
+        });
+
+        Ok(session_id)
+    })
+    .await
+    .map_err(|error| AppError::CommandFailed(format!("Task execution failed: {}", error)))?
+}
+
+#[command]
+pub async fn stop_dev_server(
+    session_id: String,
+    process_mgr: State<'_, ProcessManager>,
+) -> AppResult<bool> {
+    Ok(process_mgr.cancel(&session_id))
+}
+
 pub fn parse_npm_audit_json(content: &str) -> AppResult<crate::types::NpmAuditReport> {
     let parsed: Value = serde_json::from_str(content)?;
 
