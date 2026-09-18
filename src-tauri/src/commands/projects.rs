@@ -1273,8 +1273,7 @@ pub fn validate_project_name(name: &str) -> AppResult<()> {
     Ok(())
 }
 
-pub fn get_managed_project_path(path: &str) -> AppResult<PathBuf> {
-    let projects_path = get_project_path()?.canonicalize().map_err(AppError::Io)?;
+pub fn validate_project_dir_path(path: &str) -> AppResult<PathBuf> {
     let candidate = Path::new(path);
     if !candidate.exists() {
         return Err(AppError::PathNotFound(format!(
@@ -1284,19 +1283,167 @@ pub fn get_managed_project_path(path: &str) -> AppResult<PathBuf> {
     }
 
     let candidate = candidate.canonicalize().map_err(AppError::Io)?;
-    let relative = candidate.strip_prefix(&projects_path).map_err(|_| {
-        AppError::PermissionDenied(
-            "The requested path is outside the managed projects directory".to_string(),
-        )
-    })?;
-
-    if !candidate.is_dir() || relative.components().count() != 1 {
+    if !candidate.is_dir() {
         return Err(AppError::PermissionDenied(
-            "Only managed project directories can be modified".to_string(),
+            "Project path must be a directory".to_string(),
         ));
     }
 
     Ok(candidate)
+}
+
+pub fn get_managed_project_path(path: &str) -> AppResult<PathBuf> {
+    validate_project_dir_path(path)
+}
+
+pub fn detect_project_in_dir(path: &Path) -> Option<crate::types::DiscoveredProject> {
+    let canonical = path.canonicalize().ok()?;
+    if !canonical.is_dir() {
+        return None;
+    }
+
+    let folder_name = canonical
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Unnamed Project")
+        .to_string();
+
+    let created_at = fs::metadata(&canonical)
+        .ok()
+        .and_then(|m| m.created().ok().or_else(|| m.modified().ok()))
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis().to_string())
+        .unwrap_or_else(|| "0".to_string());
+
+    let package_json_path = canonical.join("package.json");
+    let has_package_json = package_json_path.is_file();
+
+    let mut detected_type = "other".to_string();
+    let mut project_name = folder_name.clone();
+
+    if has_package_json {
+        if let Ok(content) = fs::read_to_string(&package_json_path) {
+            if let Ok(json) = serde_json::from_str::<Value>(&content) {
+                if let Some(name) = json.get("name").and_then(Value::as_str) {
+                    if !name.trim().is_empty() {
+                        project_name = name.to_string();
+                    }
+                }
+
+                let mut deps = Vec::new();
+                for dep_field in ["dependencies", "devDependencies"] {
+                    if let Some(obj) = json.get(dep_field).and_then(Value::as_object) {
+                        for k in obj.keys() {
+                            deps.push(k.to_lowercase());
+                        }
+                    }
+                }
+
+                if deps.iter().any(|d| d == "next") {
+                    detected_type = "next".to_string();
+                } else if deps.iter().any(|d| d.contains("angular") || d == "@angular/core") {
+                    detected_type = "angular".to_string();
+                } else if deps.iter().any(|d| d == "vue" || d == "nuxt") {
+                    detected_type = "vue".to_string();
+                } else if deps.iter().any(|d| d == "react" || d == "react-dom") {
+                    detected_type = "react".to_string();
+                } else {
+                    detected_type = "other".to_string();
+                }
+            }
+        }
+    } else if canonical.join("Cargo.toml").is_file() {
+        detected_type = "rust".to_string();
+        if let Ok(content) = fs::read_to_string(canonical.join("Cargo.toml")) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("name =") {
+                    if let Some(val) = trimmed.split('=').nth(1) {
+                        let clean_val = val.trim().trim_matches('"').trim_matches('\'');
+                        if !clean_val.is_empty() {
+                            project_name = clean_val.to_string();
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    } else if canonical.join("pyproject.toml").is_file()
+        || canonical.join("requirements.txt").is_file()
+        || canonical.join("setup.py").is_file()
+    {
+        detected_type = "python".to_string();
+    } else if canonical.join("go.mod").is_file() {
+        detected_type = "go".to_string();
+    }
+
+    Some(crate::types::DiscoveredProject {
+        name: project_name,
+        path: canonical.display().to_string().replace('\\', "/"),
+        r#type: detected_type,
+        created_at,
+        has_package_json,
+    })
+}
+
+#[command]
+pub async fn detect_project_type(path: String) -> AppResult<crate::types::DiscoveredProject> {
+    task::spawn_blocking(move || {
+        let p = Path::new(&path);
+        if !p.exists() {
+            return Err(AppError::PathNotFound(format!("Path does not exist: {}", path)));
+        }
+        detect_project_in_dir(p).ok_or_else(|| {
+            AppError::CommandFailed("Could not inspect project directory".to_string())
+        })
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
+}
+
+#[command]
+pub async fn scan_directory_for_projects(
+    path: String,
+) -> AppResult<Vec<crate::types::DiscoveredProject>> {
+    task::spawn_blocking(move || {
+        let root = Path::new(&path);
+        if !root.exists() || !root.is_dir() {
+            return Err(AppError::PathNotFound(format!("Directory does not exist: {}", path)));
+        }
+
+        let mut discovered = Vec::new();
+
+        // Check if root folder itself is a single project
+        if let Some(proj) = detect_project_in_dir(root) {
+            if proj.r#type != "other" || proj.has_package_json {
+                discovered.push(proj);
+                return Ok(discovered);
+            }
+        }
+
+        // Scan subdirectories
+        if let Ok(entries) = fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let child_path = entry.path();
+                if child_path.is_dir() {
+                    if let Some(name) = child_path.file_name().and_then(|n| n.to_str()) {
+                        if name.starts_with('.') || name == "node_modules" || name == "target" {
+                            continue;
+                        }
+                    }
+
+                    if let Some(proj) = detect_project_in_dir(&child_path) {
+                        discovered.push(proj);
+                    }
+                }
+            }
+        }
+
+        discovered.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        Ok(discovered)
+    })
+    .await
+    .map_err(|e| AppError::CommandFailed(format!("Task execution failed: {}", e)))?
 }
 
 #[command]

@@ -45,6 +45,8 @@ pub fn run() {
             commands::projects::create_react_project,
             commands::projects::create_vue_project,
             commands::projects::create_next_project,
+            commands::projects::detect_project_type,
+            commands::projects::scan_directory_for_projects,
             commands::projects::delete_project,
             commands::projects::get_dir_size_command,
             commands::projects::check_npm_availability,
@@ -66,6 +68,9 @@ pub fn run() {
             commands::system::open_in_vscode,
             commands::system::open_terminal,
             commands::system::get_last_modified_command,
+            commands::git::get_git_status,
+            commands::git::git_fetch,
+            commands::git::git_pull,
             commands::cleanup::clean_project,
         ])
         .build(tauri::generate_context!())

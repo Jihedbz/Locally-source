@@ -197,6 +197,24 @@ export const tauriCommands = {
 
   deleteProject: (path: string) => invokeWithErrorHandling<string>('delete_project', { path }),
 
+  detectProjectType: (path: string) =>
+    invokeWithErrorHandling<import('@/types/project').DiscoveredProject>('detect_project_type', {
+      path,
+    }),
+
+  scanDirectoryForProjects: (path: string) =>
+    invokeWithErrorHandling<import('@/types/project').DiscoveredProject[]>(
+      'scan_directory_for_projects',
+      { path }
+    ),
+
+  getGitStatus: (path: string) =>
+    invokeWithErrorHandling<import('@/types/project').GitStatusReport>('get_git_status', { path }),
+
+  gitFetch: (path: string) => invokeWithErrorHandling<string>('git_fetch', { path }),
+
+  gitPull: (path: string) => invokeWithErrorHandling<string>('git_pull', { path }),
+
   openInExplorer: (path: string) => invokeWithErrorHandling<string>('open_in_explorer', { path }),
 
   openInVSCode: (path: string, editor?: string, customEditorPath?: string) =>

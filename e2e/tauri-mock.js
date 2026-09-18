@@ -44,6 +44,51 @@
         return 'ok'
       }
 
+      if (command === 'plugin:dialog|open') {
+        return 'C:/e2e/imported-workspace'
+      }
+
+      if (command === 'detect_project_type') {
+        return {
+          name: 'Imported App',
+          path: args.path || 'C:/e2e/imported-workspace',
+          type: 'react',
+          createdAt: new Date().toISOString(),
+          hasPackageJson: true,
+        }
+      }
+
+      if (command === 'scan_directory_for_projects') {
+        return [
+          {
+            name: 'Sample Imported App',
+            path: `${args.path || 'C:/e2e/imported-workspace'}/sample-app`,
+            type: 'next',
+            createdAt: new Date().toISOString(),
+            hasPackageJson: true,
+          },
+        ]
+      }
+
+      if (command === 'get_git_status') {
+        return {
+          isRepo: true,
+          branch: 'main',
+          isClean: true,
+          modifiedCount: 0,
+          untrackedCount: 0,
+          stagedCount: 0,
+          lastCommitHash: 'a1b2c3d4e5f6',
+          lastCommitAuthor: 'Developer',
+          lastCommitMessage: 'feat: add git integration',
+          lastCommitTimestamp: Math.floor(Date.now() / 1000) - 3600,
+        }
+      }
+
+      if (command === 'git_fetch' || command === 'git_pull') {
+        return 'Already up to date.'
+      }
+
       if (command === 'get_last_modified') return Math.floor(Date.now() / 1000)
       if (command === 'get_dir_size') return 1024 * 1024
       if (command === 'plugin:clipboard-manager|write_text') return null

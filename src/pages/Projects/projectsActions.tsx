@@ -228,14 +228,28 @@ const ProjectActions: React.FC = () => {
     const projectToDel = confirmation.project
     setBusyAction('delete')
     try {
-      await tauriCommands.deleteProject(projectToDel.path)
+      try {
+        await tauriCommands.deleteProject(projectToDel.path)
+        show('success', `${projectToDel.name} deleted permanently from disk.`)
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        if (
+          msg.includes('Remove from workspace library instead') ||
+          msg.includes('Permission denied')
+        ) {
+          show('success', `Removed ${projectToDel.name} from workspace library.`)
+        } else {
+          throw error
+        }
+      }
+
       const updatedProjects = projects.filter((p) => p.name !== projectToDel.name)
       await saveProjects(updatedProjects)
       setSelectedProject(null)
-      show('success', `${projectToDel.name} deleted successfully.`)
+      setConfirmation(null)
     } catch (error) {
       const message = handleError(error, 'deleting project')
-      show('error', `Error deleting ${projectToDel.name}: ${message}`)
+      show('error', `Error removing ${projectToDel.name}: ${message}`)
     } finally {
       setBusyAction(null)
     }

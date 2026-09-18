@@ -11,6 +11,31 @@ pub struct Project {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiscoveredProject {
+    pub name: String,
+    pub path: String,
+    pub r#type: String,
+    pub created_at: String,
+    pub has_package_json: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStatusReport {
+    pub is_repo: bool,
+    pub branch: Option<String>,
+    pub is_clean: bool,
+    pub modified_count: usize,
+    pub untracked_count: usize,
+    pub staged_count: usize,
+    pub last_commit_hash: Option<String>,
+    pub last_commit_author: Option<String>,
+    pub last_commit_message: Option<String>,
+    pub last_commit_timestamp: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NpmPackage {
     pub name: String,
     pub version: String,

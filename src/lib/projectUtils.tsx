@@ -14,8 +14,20 @@ export const getProjectIcon = (type: string, sizeClass = 'text-2xl') => {
       return <i aria-hidden="true" className={`devicon-nextjs-plain ${sizeClass}`} />
     case 'vue':
       return <i aria-hidden="true" className={`devicon-vuejs-plain colored ${sizeClass}`} />
+    case 'rust':
+      return <i aria-hidden="true" className={`devicon-rust-plain ${sizeClass}`} />
+    case 'python':
+      return <i aria-hidden="true" className={`devicon-python-plain colored ${sizeClass}`} />
+    case 'go':
+      return (
+        <i aria-hidden="true" className={`devicon-go-original-wordmark colored ${sizeClass}`} />
+      )
+    case 'svelte':
+      return <i aria-hidden="true" className={`devicon-svelte-plain colored ${sizeClass}`} />
+    case 'astro':
+      return <i aria-hidden="true" className={`devicon-astro-plain colored ${sizeClass}`} />
     default:
-      return <Code className="text-2xl text-muted-foreground" />
+      return <Code className={`text-muted-foreground ${sizeClass}`} />
   }
 }
 
@@ -30,6 +42,14 @@ export const getProjectColor = (type: string) => {
       return 'from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/20'
     case 'next':
       return 'from-slate-500/10 via-slate-500/5 to-transparent border-slate-500/20'
+    case 'vue':
+      return 'from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/20'
+    case 'rust':
+      return 'from-amber-600/10 via-amber-600/5 to-transparent border-amber-600/20'
+    case 'python':
+      return 'from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20'
+    case 'go':
+      return 'from-cyan-500/10 via-cyan-500/5 to-transparent border-cyan-500/20'
     default:
       return 'from-primary/10 via-primary/5 to-transparent border-primary/20'
   }

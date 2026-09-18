@@ -2,14 +2,45 @@ import * as React from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { appDataDir, join } from '@tauri-apps/api/path'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
-import { CalendarDays, Check, Clipboard, Clock, Database, Layers, Plus, Tag, X } from 'lucide-react'
+import {
+  CalendarDays,
+  Check,
+  Clipboard,
+  Clock,
+  Database,
+  Download,
+  GitBranch,
+  Layers,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Tag,
+  User,
+  X,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useProjectStore } from '@/store/projectStore'
+import { useAlertStore } from '@/store/alertStore'
 import { getProjectIcon } from '@/lib/projectUtils'
+import { GitStatusReport } from '@/types/project'
+import { tauriCommands } from '@/lib/tauriUtils'
+
+const formatRelativeTime = (timestamp?: number) => {
+  if (!timestamp) return 'Unknown'
+  const seconds = Math.floor(Date.now() / 1000 - timestamp)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
 
 const ProjectDetails: React.FC = () => {
   const { selectedProject } = useProjectStore()
+  const { show } = useAlertStore()
   const updateProjectTags = useProjectStore((state) => state.updateProjectTags)
   const [lastModified, setLastModified] = React.useState<Date | null>(null)
   const [folderSize, setFolderSize] = React.useState<string>('Calculating...')
@@ -20,10 +51,55 @@ const ProjectDetails: React.FC = () => {
   const [tagInput, setTagInput] = React.useState('')
   const [isSavingTags, setIsSavingTags] = React.useState(false)
 
+  const [gitStatus, setGitStatus] = React.useState<GitStatusReport | null>(null)
+  const [isLoadingGit, setIsLoadingGit] = React.useState(false)
+  const [gitAction, setGitAction] = React.useState<'fetch' | 'pull' | null>(null)
+
   React.useEffect(() => {
     setDraftTags(selectedProject?.tags || [])
     setTagInput('')
   }, [selectedProject])
+
+  const fetchGitStatus = React.useCallback(async (path: string) => {
+    setIsLoadingGit(true)
+    try {
+      const report = await tauriCommands.getGitStatus(path)
+      setGitStatus(report)
+    } catch (error) {
+      console.error('Git status error:', error)
+      setGitStatus(null)
+    } finally {
+      setIsLoadingGit(false)
+    }
+  }, [])
+
+  const handleGitFetch = async () => {
+    if (!selectedProject) return
+    setGitAction('fetch')
+    try {
+      await tauriCommands.gitFetch(selectedProject.path)
+      show('success', 'Git fetch completed.')
+      await fetchGitStatus(selectedProject.path)
+    } catch (error) {
+      show('error', `Git fetch failed: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setGitAction(null)
+    }
+  }
+
+  const handleGitPull = async () => {
+    if (!selectedProject) return
+    setGitAction('pull')
+    try {
+      await tauriCommands.gitPull(selectedProject.path)
+      show('success', 'Git pull completed.')
+      await fetchGitStatus(selectedProject.path)
+    } catch (error) {
+      show('error', `Git pull failed: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setGitAction(null)
+    }
+  }
 
   const getLastModifiedDate = React.useCallback(async (dirPath: string) => {
     try {
@@ -65,6 +141,8 @@ const ProjectDetails: React.FC = () => {
         .then(setFolderSize)
         .finally(() => setIsLoadingMetadata(false))
 
+      fetchGitStatus(selectedProject.path)
+
       const shortenPath = async (fullPath: string) => {
         try {
           const appDataDirPath = await appDataDir()
@@ -88,8 +166,9 @@ const ProjectDetails: React.FC = () => {
     } else {
       setShortenedPath('')
       setMetadataError(null)
+      setGitStatus(null)
     }
-  }, [selectedProject, getLastModifiedDate, getFolderSize])
+  }, [selectedProject, getLastModifiedDate, getFolderSize, fetchGitStatus])
 
   if (!selectedProject) return null
 
@@ -122,6 +201,99 @@ const ProjectDetails: React.FC = () => {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Git Integration Section */}
+      <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <GitBranch className="h-4 w-4 text-primary" />
+            Git status
+          </div>
+          {gitStatus?.isRepo && (
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Fetch from remote"
+                disabled={Boolean(gitAction) || isLoadingGit}
+                onClick={handleGitFetch}
+              >
+                {gitAction === 'fetch' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Pull latest changes"
+                disabled={Boolean(gitAction) || isLoadingGit}
+                onClick={handleGitPull}
+              >
+                {gitAction === 'pull' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {isLoadingGit ? (
+          <p className="text-xs text-muted-foreground">Checking repository status...</p>
+        ) : !gitStatus?.isRepo ? (
+          <p className="text-xs text-muted-foreground">Not a Git repository</p>
+        ) : (
+          <div className="space-y-2.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+                {gitStatus.branch || 'HEAD'}
+              </span>
+              <Badge
+                variant={gitStatus.isClean ? 'outline' : 'secondary'}
+                className="text-[10px] gap-1 px-2 py-0.5"
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    gitStatus.isClean ? 'bg-emerald-500' : 'bg-amber-500'
+                  }`}
+                />
+                {gitStatus.isClean ? 'Clean' : 'Uncommitted'}
+              </Badge>
+            </div>
+
+            {!gitStatus.isClean && (
+              <div className="flex gap-2 text-[11px] text-muted-foreground">
+                {gitStatus.modifiedCount > 0 && <span>{gitStatus.modifiedCount} modified</span>}
+                {gitStatus.untrackedCount > 0 && <span>{gitStatus.untrackedCount} untracked</span>}
+                {gitStatus.stagedCount > 0 && <span>{gitStatus.stagedCount} staged</span>}
+              </div>
+            )}
+
+            {gitStatus.lastCommitMessage && (
+              <div className="rounded-lg border border-border/50 bg-background/80 p-2.5 space-y-1">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1 truncate font-medium text-foreground">
+                    <User className="h-3 w-3 shrink-0" />
+                    {gitStatus.lastCommitAuthor || 'Unknown'}
+                  </span>
+                  <span className="shrink-0">
+                    {formatRelativeTime(gitStatus.lastCommitTimestamp)}
+                  </span>
+                </div>
+                <p className="line-clamp-2 text-xs text-foreground/90 font-mono leading-relaxed">
+                  {gitStatus.lastCommitMessage}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="border-y border-border/70 py-4">
@@ -177,7 +349,10 @@ const ProjectDetails: React.FC = () => {
               if (event.key !== 'Enter') return
               event.preventDefault()
               const nextTag = tagInput.trim()
-              if (nextTag && !draftTags.some((tag) => tag.toLowerCase() === nextTag.toLowerCase())) {
+              if (
+                nextTag &&
+                !draftTags.some((tag) => tag.toLowerCase() === nextTag.toLowerCase())
+              ) {
                 setDraftTags((current) => [...current, nextTag])
                 setTagInput('')
               }
@@ -193,7 +368,10 @@ const ProjectDetails: React.FC = () => {
             title="Add project tag"
             onClick={() => {
               const nextTag = tagInput.trim()
-              if (nextTag && !draftTags.some((tag) => tag.toLowerCase() === nextTag.toLowerCase())) {
+              if (
+                nextTag &&
+                !draftTags.some((tag) => tag.toLowerCase() === nextTag.toLowerCase())
+              ) {
                 setDraftTags((current) => [...current, nextTag])
                 setTagInput('')
               }

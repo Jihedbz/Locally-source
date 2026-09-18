@@ -10,6 +10,8 @@ import {
   ChevronDown,
   FolderOpen,
   FolderPlus,
+  FolderSearch,
+  GitBranch,
   Grid3X3,
   List,
   Pin,
@@ -29,19 +31,53 @@ import {
 } from '@/components/ui/dropdown-menu'
 import ProjectActions from './projectsActions'
 import ProjectDetails from './projectDetails'
+import ImportProjectsDialog from './importProjectsDialog'
 import { useNavigate } from 'react-router-dom'
 import { Project } from '@/types/project'
 import { useProjectStore } from '@/store/projectStore'
 import { useProjects } from '@/hooks/useProjects'
 import { getProjectIcon, getProjectColor } from '@/lib/projectUtils'
+import { tauriCommands } from '@/lib/tauriUtils'
+
+const GitBadge = memo(({ projectPath }: { projectPath: string }) => {
+  const [git, setGit] = useState<{ branch?: string; isClean: boolean; isRepo: boolean } | null>(
+    null
+  )
+
+  useEffect(() => {
+    let active = true
+    tauriCommands
+      .getGitStatus(projectPath)
+      .then((res) => {
+        if (active && res.isRepo) {
+          setGit({ branch: res.branch, isClean: res.isClean, isRepo: true })
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [projectPath])
+
+  if (!git?.isRepo) return null
+
+  return (
+    <Badge variant="outline" className="gap-1 text-[10px] font-normal">
+      <GitBranch className="h-3 w-3 text-muted-foreground" />
+      <span className="truncate max-w-[90px]">{git.branch || 'HEAD'}</span>
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${git.isClean ? 'bg-emerald-500' : 'bg-amber-500'}`}
+      />
+    </Badge>
+  )
+})
 
 const Projects = () => {
   const navigate = useNavigate()
   const [tagFilter, setTagFilter] = useState('all')
   const { searchQuery, setSearchQuery, viewMode, setViewMode, projects, isLoading } =
     useProjectStore()
-  const { filteredProjects, selectedProject, setSelectedProject } =
-    useProjects(tagFilter)
+  const { filteredProjects, selectedProject, setSelectedProject } = useProjects(tagFilter)
 
   const availableTags = useMemo(
     () =>
@@ -111,7 +147,10 @@ const Projects = () => {
             <span>
               {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
             </span>
-            <span>{project.type.toUpperCase()}</span>
+            <div className="flex items-center gap-2">
+              <GitBadge projectPath={project.path} />
+              <span>{project.type.toUpperCase()}</span>
+            </div>
           </div>
         </div>
       </CardContent>
@@ -145,9 +184,12 @@ const Projects = () => {
               )}
             </div>
           </div>
-          <div className="text-right text-sm text-muted-foreground">
+          <div className="text-right text-sm text-muted-foreground flex flex-col items-end gap-1">
             <p>{new Date(project.createdAt || Date.now()).toLocaleDateString()}</p>
-            {project.pinned && <Badge variant="secondary">Pinned</Badge>}
+            <div className="flex items-center gap-1.5">
+              <GitBadge projectPath={project.path} />
+              {project.pinned && <Badge variant="secondary">Pinned</Badge>}
+            </div>
           </div>
         </div>
       </CardContent>
@@ -170,43 +212,53 @@ const Projects = () => {
               Keep your local development workspaces close, searchable, and ready to open.
             </p>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="lg" className="w-full sm:w-auto">
-                <Plus className="h-4 w-4" />
-                New project
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Choose a framework</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/nextjs')}>
-                <span className="flex w-5 items-center justify-center">
-                  {getProjectIcon('nextjs', 'text-base')}
-                </span>
-                Next.js
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/angular')}>
-                <span className="flex w-5 items-center justify-center">
-                  {getProjectIcon('angular', 'text-base')}
-                </span>
-                Angular
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/react')}>
-                <span className="flex w-5 items-center justify-center">
-                  {getProjectIcon('react', 'text-base')}
-                </span>
-                React
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/vue')}>
-                <span className="flex w-5 items-center justify-center">
-                  {getProjectIcon('vue', 'text-base')}
-                </span>
-                Vue
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <ImportProjectsDialog
+              trigger={
+                <Button size="lg" variant="outline" className="w-full gap-2 sm:w-auto">
+                  <FolderSearch className="h-4 w-4 text-primary" />
+                  Import project
+                </Button>
+              }
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="lg" className="w-full sm:w-auto">
+                  <Plus className="h-4 w-4" />
+                  New project
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Choose a framework</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/nextjs')}>
+                  <span className="flex w-5 items-center justify-center">
+                    {getProjectIcon('nextjs', 'text-base')}
+                  </span>
+                  Next.js
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/angular')}>
+                  <span className="flex w-5 items-center justify-center">
+                    {getProjectIcon('angular', 'text-base')}
+                  </span>
+                  Angular
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/react')}>
+                  <span className="flex w-5 items-center justify-center">
+                    {getProjectIcon('react', 'text-base')}
+                  </span>
+                  React
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/vue')}>
+                  <span className="flex w-5 items-center justify-center">
+                    {getProjectIcon('vue', 'text-base')}
+                  </span>
+                  Vue
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </header>
 
         <div className="grid grid-cols-2 divide-x rounded-2xl border border-border/70 bg-card/60 md:grid-cols-4">
@@ -330,7 +382,9 @@ const Projects = () => {
                   )}
                 </div>
                 <h3 className="mt-5 font-semibold">
-                  {searchQuery || tagFilter !== 'all' ? 'No matching projects' : 'Your library is empty'}
+                  {searchQuery || tagFilter !== 'all'
+                    ? 'No matching projects'
+                    : 'Your library is empty'}
                 </h3>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
                   {searchQuery || tagFilter !== 'all'
@@ -338,10 +392,20 @@ const Projects = () => {
                     : 'Create a workspace to start building your local project library.'}
                 </p>
                 {!searchQuery && tagFilter === 'all' && (
-                  <Button className="mt-5" onClick={() => navigate('/nextjs')}>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Create your first project
-                  </Button>
+                  <div className="mt-5 flex items-center justify-center gap-3">
+                    <Button onClick={() => navigate('/nextjs')}>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Create project
+                    </Button>
+                    <ImportProjectsDialog
+                      trigger={
+                        <Button variant="outline" className="gap-2">
+                          <FolderSearch className="h-4 w-4 text-primary" />
+                          Import folder
+                        </Button>
+                      }
+                    />
+                  </div>
                 )}
               </div>
             ) : (

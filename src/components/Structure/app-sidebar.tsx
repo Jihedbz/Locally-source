@@ -57,11 +57,7 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar
-      collapsible="icon"
-      {...props}
-      className="border-r border-sidebar-border/70 bg-sidebar"
-    >
+    <Sidebar collapsible="icon" {...props} className="border-r border-sidebar-border/70 bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border/70 p-3 group-data-[collapsible=icon]:p-2">
         <TeamSwitcher />
       </SidebarHeader>

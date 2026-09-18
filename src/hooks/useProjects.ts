@@ -15,13 +15,14 @@ export const useProjects = (tagFilter = 'all') => {
 
   const filteredProjects = useMemo(() => {
     const searchLower = searchQuery.toLowerCase()
-    return projects.filter(
-      (project) =>
-        project.name.toLowerCase().includes(searchLower) ||
-        project.type.toLowerCase().includes(searchLower) ||
-        (project.tags || []).some((tag) => tag.toLowerCase().includes(searchLower))
-    )
-    .filter((project) => tagFilter === 'all' || (project.tags || []).includes(tagFilter))
+    return projects
+      .filter(
+        (project) =>
+          project.name.toLowerCase().includes(searchLower) ||
+          project.type.toLowerCase().includes(searchLower) ||
+          (project.tags || []).some((tag) => tag.toLowerCase().includes(searchLower))
+      )
+      .filter((project) => tagFilter === 'all' || (project.tags || []).includes(tagFilter))
   }, [projects, searchQuery, tagFilter])
 
   return {
