@@ -5,7 +5,12 @@ export interface Project {
   createdAt: string
   pinned: boolean
   tags?: string[]
+  notes?: string
+  lastOpened?: string
+  color?: string
 }
+
+export type ProjectColorOption = 'blue' | 'purple' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'slate'
 
 export type ProjectType =
   | 'angular'

@@ -9,11 +9,14 @@ import {
   Clock,
   Database,
   Download,
+  FileText,
   GitBranch,
   Layers,
   Loader2,
+  Palette,
   Plus,
   RefreshCw,
+  Sparkles,
   Tag,
   User,
   X,
@@ -42,6 +45,9 @@ const ProjectDetails: React.FC = () => {
   const { selectedProject } = useProjectStore()
   const { show } = useAlertStore()
   const updateProjectTags = useProjectStore((state) => state.updateProjectTags)
+  const updateProjectNotes = useProjectStore((state) => state.updateProjectNotes)
+  const updateProjectColor = useProjectStore((state) => state.updateProjectColor)
+
   const [lastModified, setLastModified] = React.useState<Date | null>(null)
   const [folderSize, setFolderSize] = React.useState<string>('Calculating...')
   const [shortenedPath, setShortenedPath] = React.useState<string>('')
@@ -51,6 +57,9 @@ const ProjectDetails: React.FC = () => {
   const [tagInput, setTagInput] = React.useState('')
   const [isSavingTags, setIsSavingTags] = React.useState(false)
 
+  const [notesInput, setNotesInput] = React.useState('')
+  const [isSavingNotes, setIsSavingNotes] = React.useState(false)
+
   const [gitStatus, setGitStatus] = React.useState<GitStatusReport | null>(null)
   const [isLoadingGit, setIsLoadingGit] = React.useState(false)
   const [gitAction, setGitAction] = React.useState<'fetch' | 'pull' | null>(null)
@@ -58,6 +67,7 @@ const ProjectDetails: React.FC = () => {
   React.useEffect(() => {
     setDraftTags(selectedProject?.tags || [])
     setTagInput('')
+    setNotesInput(selectedProject?.notes || '')
   }, [selectedProject])
 
   const fetchGitStatus = React.useCallback(async (path: string) => {
@@ -399,6 +409,82 @@ const ProjectDetails: React.FC = () => {
         </Button>
       </div>
 
+      {/* Accent Color Picker */}
+      <div className="space-y-3 border-b border-border/70 pb-5">
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <Palette className="h-3.5 w-3.5" /> Accent color
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'default', bg: 'bg-primary' },
+            { id: 'blue', bg: 'bg-blue-500' },
+            { id: 'purple', bg: 'bg-purple-500' },
+            { id: 'emerald', bg: 'bg-emerald-500' },
+            { id: 'amber', bg: 'bg-amber-500' },
+            { id: 'rose', bg: 'bg-rose-500' },
+            { id: 'cyan', bg: 'bg-cyan-500' },
+            { id: 'indigo', bg: 'bg-indigo-500' },
+            { id: 'slate', bg: 'bg-slate-500' },
+          ].map((c) => {
+            const isSelected = (selectedProject.color || 'default') === c.id
+            return (
+              <button
+                key={c.id}
+                type="button"
+                title={`Set accent color: ${c.id}`}
+                onClick={() =>
+                  updateProjectColor(selectedProject.name, c.id === 'default' ? '' : c.id)
+                }
+                className={`h-6 w-6 rounded-full ${c.bg} transition-all ${
+                  isSelected
+                    ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110'
+                    : 'opacity-80 hover:opacity-100'
+                }`}
+              />
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Project Notes */}
+      <div className="space-y-3 border-b border-border/70 pb-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            <FileText className="h-3.5 w-3.5" /> Notes
+          </div>
+          {selectedProject.notes && (
+            <span className="text-[10px] text-muted-foreground">Saved</span>
+          )}
+        </div>
+        <textarea
+          aria-label="Project notes"
+          value={notesInput}
+          onChange={(e) => setNotesInput(e.target.value)}
+          placeholder="Add quick notes, tasks, or setup reminders for this workspace..."
+          rows={3}
+          className="w-full rounded-md border border-input bg-background p-2.5 text-xs leading-5 outline-none focus:ring-1 focus:ring-ring resize-none"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="w-full text-xs"
+          disabled={isSavingNotes || notesInput === (selectedProject.notes || '')}
+          onClick={async () => {
+            setIsSavingNotes(true)
+            try {
+              await updateProjectNotes(selectedProject.name, notesInput.trim())
+              show('success', 'Project notes updated.')
+            } finally {
+              setIsSavingNotes(false)
+            }
+          }}
+        >
+          <Check className="mr-1.5 h-3.5 w-3.5" />
+          {isSavingNotes ? 'Saving notes...' : 'Save notes'}
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 gap-x-4 gap-y-5">
         <div>
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
@@ -416,17 +502,29 @@ const ProjectDetails: React.FC = () => {
             {new Date(selectedProject.createdAt).toLocaleDateString()}
           </p>
         </div>
-        <div className="col-span-2">
+        <div>
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
             <Clock className="h-3.5 w-3.5" /> Last modified
           </div>
           <p className="mt-2 text-sm font-semibold text-foreground">
             {metadataError ||
               (lastModified
-                ? lastModified.toLocaleString()
+                ? lastModified.toLocaleDateString()
                 : isLoadingMetadata
                   ? 'Loading...'
                   : 'Unavailable')}
+          </p>
+        </div>
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5" /> Last touched
+          </div>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {selectedProject.lastOpened
+              ? formatRelativeTime(
+                  Math.floor(new Date(selectedProject.lastOpened).getTime() / 1000)
+                )
+              : 'Recently'}
           </p>
         </div>
       </div>

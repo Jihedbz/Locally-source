@@ -17,6 +17,9 @@ interface ProjectState {
   loadProjects: () => Promise<void>
   addProject: (project: Project) => Promise<void>
   updateProjectTags: (projectName: string, tags: string[]) => Promise<void>
+  updateProjectNotes: (projectName: string, notes: string) => Promise<void>
+  updateProjectColor: (projectName: string, color: string) => Promise<void>
+  touchProject: (projectName: string) => Promise<void>
   saveProjects: (projects: Project[]) => Promise<void>
 }
 
@@ -99,6 +102,61 @@ export const useProjectStore = create<ProjectState>((set) => ({
       selectedProject:
         state.selectedProject?.name === projectName
           ? { ...state.selectedProject, tags }
+          : state.selectedProject,
+    }))
+  },
+
+  updateProjectNotes: async (projectName, notes) => {
+    const projects = await readProjects()
+    const updatedProjects = projects.map((project) =>
+      project.name === projectName ? { ...project, notes } : project
+    )
+    await writeTextFile(PROJECTS_FILE, JSON.stringify(updatedProjects, null, 2), {
+      baseDir: BaseDirectory.AppData,
+      create: true,
+    })
+    set((state) => ({
+      projects: updatedProjects,
+      selectedProject:
+        state.selectedProject?.name === projectName
+          ? { ...state.selectedProject, notes }
+          : state.selectedProject,
+    }))
+  },
+
+  updateProjectColor: async (projectName, color) => {
+    const projects = await readProjects()
+    const updatedProjects = projects.map((project) =>
+      project.name === projectName ? { ...project, color } : project
+    )
+    await writeTextFile(PROJECTS_FILE, JSON.stringify(updatedProjects, null, 2), {
+      baseDir: BaseDirectory.AppData,
+      create: true,
+    })
+    set((state) => ({
+      projects: updatedProjects,
+      selectedProject:
+        state.selectedProject?.name === projectName
+          ? { ...state.selectedProject, color }
+          : state.selectedProject,
+    }))
+  },
+
+  touchProject: async (projectName) => {
+    const lastOpened = new Date().toISOString()
+    const projects = await readProjects()
+    const updatedProjects = projects.map((project) =>
+      project.name === projectName ? { ...project, lastOpened } : project
+    )
+    await writeTextFile(PROJECTS_FILE, JSON.stringify(updatedProjects, null, 2), {
+      baseDir: BaseDirectory.AppData,
+      create: true,
+    })
+    set((state) => ({
+      projects: updatedProjects,
+      selectedProject:
+        state.selectedProject?.name === projectName
+          ? { ...state.selectedProject, lastOpened }
           : state.selectedProject,
     }))
   },

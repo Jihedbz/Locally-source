@@ -93,16 +93,22 @@ const Projects = () => {
     }
   }, [availableTags, tagFilter])
 
+  const touchProject = useProjectStore((state) => state.touchProject)
+
   const handleProjectClick = useCallback(
     (project: Project) => {
       setSelectedProject(project)
+      touchProject(project.name).catch(() => {})
     },
-    [setSelectedProject]
+    [setSelectedProject, touchProject]
   )
 
   const ProjectCard = memo(({ project }: { project: Project }) => (
     <Card
-      className={`hover-lift cursor-pointer transition-all duration-300 shadow-sm ${getProjectColor(project.type)} border bg-background/70 ${
+      className={`hover-lift cursor-pointer transition-all duration-300 shadow-sm ${getProjectColor(
+        project.type,
+        project.color
+      )} border bg-background/70 ${
         selectedProject?.name === project.name ? 'ring-2 ring-primary' : 'border-opacity-80'
       }`}
       onClick={() => handleProjectClick(project)}
@@ -159,7 +165,10 @@ const Projects = () => {
 
   const ProjectListItem = memo(({ project }: { project: Project }) => (
     <Card
-      className={`hover-lift cursor-pointer transition-all duration-300 shadow-sm ${getProjectColor(project.type)} border bg-background/70 ${
+      className={`hover-lift cursor-pointer transition-all duration-300 shadow-sm ${getProjectColor(
+        project.type,
+        project.color
+      )} border bg-background/70 ${
         selectedProject?.name === project.name ? 'ring-2 ring-primary' : 'border-opacity-80'
       }`}
       onClick={() => handleProjectClick(project)}

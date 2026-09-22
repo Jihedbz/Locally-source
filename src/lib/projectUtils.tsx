@@ -32,9 +32,30 @@ export const getProjectIcon = (type: string, sizeClass = 'text-2xl') => {
 }
 
 /**
- * Returns the CSS gradient and border classes for a given project type.
+ * Returns the CSS gradient and border classes for a given project type or custom accent.
  */
-export const getProjectColor = (type: string) => {
+export const getProjectColor = (type: string, customColor?: string) => {
+  if (customColor) {
+    switch (customColor.toLowerCase()) {
+      case 'blue':
+        return 'from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/30'
+      case 'purple':
+        return 'from-purple-500/10 via-purple-500/5 to-transparent border-purple-500/30'
+      case 'emerald':
+        return 'from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-500/30'
+      case 'amber':
+        return 'from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/30'
+      case 'rose':
+        return 'from-rose-500/10 via-rose-500/5 to-transparent border-rose-500/30'
+      case 'cyan':
+        return 'from-cyan-500/10 via-cyan-500/5 to-transparent border-cyan-500/30'
+      case 'indigo':
+        return 'from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/30'
+      case 'slate':
+        return 'from-slate-500/10 via-slate-500/5 to-transparent border-slate-500/30'
+    }
+  }
+
   switch (type.toLowerCase()) {
     case 'angular':
       return 'from-red-500/10 via-red-500/5 to-transparent border-red-500/20'
